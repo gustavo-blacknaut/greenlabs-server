@@ -19,6 +19,8 @@ import (
 	"syscall"
 )
 
+const versao = "v0.2.0"
+
 type opcoes struct {
 	porta int
 	tunel string
@@ -65,12 +67,17 @@ Endpoints:
   /stats            contadores desde a subida`
 
 func main() {
+	prepararConsole()
+
 	// Antes de ler qualquer configuração: um .env na pasta do servidor deve
 	// valer tanto para quem roda pelo terminal quanto para quem sobe por
 	// systemd, Docker ou painel.
 	CarregarEnv(".env")
 
 	opts := lerOpcoes(os.Args[1:])
+
+	mostrarMarca(versao)
+	perguntarConfiguracao(&opts)
 
 	servidor, err := Iniciar(ResolverPorta(opts.porta))
 	if err != nil {
