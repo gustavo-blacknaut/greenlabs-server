@@ -1,0 +1,6 @@
+.env
+*.log
+*.exe
+greenlabs-server
+carga
+dist/
