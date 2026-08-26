@@ -222,7 +222,12 @@ existe estado em que o egg instale errado e você fique travado.
 | -------- | -------- | ------------------------------------------------------------ |
 | `SFU`    | `1`      | `1` liga o retransmissor, `0` desliga                         |
 | `PORTA`  | *branco* | em branco usa a porta alocada pelo painel; ou escolha uma     |
-| `VERSAO` | `latest` | release a baixar; aceita uma tag (`v0.2.0`)                   |
+| `VERSAO` | `latest` | release a baixar; para fixar, a tag com "v" (`v0.2.0`)   |
+
+**Sobre a versão.** Só tag de release serve, e toda tag começa com `v`. Nome de
+branch não vale: o que se baixa é uma release, não o código. Qualquer valor que
+não exista cai na mais recente, com aviso no console — em vez de 404 e servidor
+parado.
 
 **Sobre a porta.** Em branco usa a que o painel alocou, que é o caso normal.
 Preencha só se quiser outra — e ela precisa estar liberada para este servidor,

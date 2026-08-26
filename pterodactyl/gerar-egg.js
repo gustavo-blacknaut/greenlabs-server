@@ -37,14 +37,23 @@ const egg = {
   startup: [
     // Reaproveita o que já está na pasta. A checagem não é "o arquivo existe" e
     // sim "o arquivo roda": um download interrompido deixa um arquivo com
-    // tamanho, que passaria num teste de existência e quebraria na hora de subir.
+    // tamanho, que passaria num teste de existência e quebraria ao subir.
     'chmod +x greenlabs-server 2>/dev/null',
     'if [ -s greenlabs-server ] && bash -c "./greenlabs-server --help" >/dev/null 2>&1; then echo "GreenLabs pronto, reaproveitando o que ja esta aqui"; else ' +
       'A=amd64; case $(uname -m) in aarch64|arm64) A=arm64;; esac; ' +
-      'V={{VERSAO}}; [ -z "$V" ] && V=latest; ' +
-      'if [ "$V" = latest ]; then B=https://github.com/gustavo-blacknaut/greenlabs-server/releases/latest/download; else B=https://github.com/gustavo-blacknaut/greenlabs-server/releases/download/$V; fi; ' +
-      'echo "GreenLabs baixando (linux-$A, $V)..."; rm -f greenlabs-server; ' +
-      '{ curl -fsSL -o greenlabs-server $B/greenlabs-server-linux-$A || wget -qO greenlabs-server $B/greenlabs-server-linux-$A; } || { echo "ERRO: nao consegui baixar; confira a internet do host"; exit 1; }; ' +
+      'R=https://github.com/gustavo-blacknaut/greenlabs-server/releases; ' +
+      'N=greenlabs-server-linux-$A; ' +
+      // Só tag de release serve aqui, e toda tag começa com "v". Nome de branch
+      // ("main") virava /releases/download/main/... e voltava 404 - foi o que
+      // aconteceu com quem tinha a variável do egg antigo, de quando ele
+      // compilava do fonte e "main" fazia sentido.
+      'V={{VERSAO}}; ' +
+      'case "$V" in v*) U=$R/download/$V/$N;; *) U=$R/latest/download/$N;; esac; ' +
+      'echo "GreenLabs baixando $N..."; rm -f greenlabs-server; ' +
+      'B() { curl -fsSL -o greenlabs-server "$1" 2>/dev/null || wget -qO greenlabs-server "$1" 2>/dev/null; }; ' +
+      // Segunda tentativa na mais recente: cobre tag apagada, tag digitada
+      // errada e qualquer outro valor que não exista mais.
+      'B "$U" || { echo "  nao achei nessa versao; tentando a mais recente"; B "$R/latest/download/$N"; } || { echo "ERRO: nao consegui baixar; confira a internet do host"; exit 1; }; ' +
       'chmod +x greenlabs-server; ' +
       'bash -c "./greenlabs-server --help" >/dev/null 2>&1 || { echo "ERRO: o arquivo baixado nao executa nesta maquina"; exit 1; }; ' +
       'echo "GreenLabs instalado"; fi',
@@ -103,12 +112,10 @@ const egg = {
     {
       name: 'Versão',
       description:
-        'Deixe em "latest" para instalar a release mais recente. Também aceita uma tag ' +
-        '(v0.2.0) ou o nome de uma branch.\n\n' +
-        'A instalação baixa o binário pronto e confere se ele conhece as flags que o painel ' +
-        'vai passar. Se for antigo demais, compila do fonte em vez de subir um servidor que ' +
-        'ignoraria a sua escolha de SFU em silêncio.\n\n' +
-        'Mudar aqui só tem efeito ao reinstalar o servidor.',
+        'Deixe em "latest" para a release mais recente. Para fixar uma versão, use a tag ' +
+        'exata, com o "v" na frente: v0.2.0.\n\n' +
+        'Qualquer outro valor cai na mais recente — nome de branch não vale aqui, porque o ' +
+        'que se baixa é uma release, não o código.',
       env_variable: 'VERSAO',
       default_value: 'latest',
       user_viewable: true,
