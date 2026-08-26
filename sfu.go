@@ -23,6 +23,7 @@ package main
 import (
 	"encoding/json"
 	"sync"
+	"time"
 
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v4"
@@ -157,6 +158,16 @@ func (s *SFU) Entrar(sala, peer string, enviar func([]byte)) error {
 
 	conexao.OnConnectionStateChange(func(estado webrtc.PeerConnectionState) {
 		infoSFU("midia com %s: %s", curto(peer), estado.String())
+
+		// Quadro-chave só faz sentido depois que o transporte deste
+		// participante existe. Pedir antes - que era o que acontecia, junto com
+		// a oferta - produzia o quadro cedo demais: ele era repassado enquanto
+		// o destinatário ainda estava em "connecting", se perdia, e ninguém
+		// pedia outro. A faixa aparecia na lista e nunca decodificava.
+		if estado == webrtc.PeerConnectionStateConnected {
+			s.pedirChaveDeTudo(sala, peer)
+		}
+
 		if estado == webrtc.PeerConnectionStateFailed ||
 			estado == webrtc.PeerConnectionStateClosed {
 			s.Sair(sala, peer)
@@ -174,25 +185,56 @@ func (s *SFU) Entrar(sala, peer string, enviar func([]byte)) error {
 	// Quem chega já recebe o que os outros estão publicando. Sem isto a pessoa
 	// entra numa sala com gente transmitindo e vê tela preta até alguém
 	// recomeçar a transmissão.
+	assinadas := 0
 	for _, f := range faixasExistentes {
 		if f.dono == peer {
 			continue
 		}
 		s.assinar(sessao, f)
+		assinadas++
+	}
+	if assinadas > 0 {
+		infoSFU("%s entrou numa sala com %d faixa(s) em andamento; ja inscrito",
+			curto(peer), assinadas)
 	}
 
 	// Uma oferta só, com tudo dentro. Oferecer por faixa deixava a conexão em
 	// have-local-offer e a segunda tentativa era recusada - o participante
 	// entrava e não recebia nada.
-	if err := s.oferecer(sessao); err != nil {
-		return err
+	// O quadro-chave é pedido quando a conexão ficar de pé, em
+	// OnConnectionStateChange, e não aqui.
+	return s.oferecer(sessao)
+}
+
+// pedirChaveDeTudo pede um quadro-chave de cada transmissão que este
+// participante está recebendo. É chamado quando a conexão dele fica de pé:
+// antes disso o quadro se perderia no caminho.
+func (s *SFU) pedirChaveDeTudo(sala, peer string) {
+	s.mu.RLock()
+	sessao := s.salas[sala][peer]
+	faixas := append([]*faixaEncaminhada(nil), s.faixas[sala]...)
+	s.mu.RUnlock()
+	if sessao == nil {
+		return
 	}
-	for _, f := range faixasExistentes {
-		if f.dono != peer {
-			s.pedirChave(sala, f)
+
+	pedidas := 0
+	for _, f := range faixas {
+		if f.dono == peer {
+			continue
 		}
+		sessao.mu.Lock()
+		inscrito := sessao.saidas[f.saida.ID()] != nil
+		sessao.mu.Unlock()
+		if !inscrito {
+			continue
+		}
+		s.insistirNaChave(sala, f)
+		pedidas++
 	}
-	return nil
+	if pedidas > 0 {
+		infoSFU("%s conectou; pedi quadro-chave de %d transmissao(oes)", curto(peer), pedidas)
+	}
 }
 
 func (s *SFU) oferecer(sessao *sessaoSFU) error {
@@ -308,7 +350,37 @@ func (s *SFU) assinarComChave(sala string, destino *sessaoSFU, f *faixaEncaminha
 	if err := s.oferecer(destino); err != nil {
 		erroSFU("renegociacao com %s falhou: %v", curto(destino.peer), err)
 	}
-	s.pedirChave(sala, f)
+	s.insistirNaChave(sala, f)
+}
+
+// insistirNaChave pede o quadro-chave algumas vezes, espaçado.
+//
+// Um pedido só é frágil: ele pode sair antes da renegociação terminar, ou
+// simplesmente se perder - PLI vai por RTCP, sem garantia de entrega. Quando
+// isso acontece, quem está recebendo fica esperando um quadro-chave que nunca
+// vem, e a tela fica parada até alguém recomeçar a transmissão.
+func (s *SFU) insistirNaChave(sala string, f *faixaEncaminhada) {
+	go func() {
+		for _, espera := range []time.Duration{0, 500 * time.Millisecond, 1500 * time.Millisecond} {
+			if espera > 0 {
+				time.Sleep(espera)
+			}
+			// Faixa que saiu do ar no meio da espera: nada a pedir.
+			s.mu.RLock()
+			viva := false
+			for _, atual := range s.faixas[sala] {
+				if atual == f {
+					viva = true
+					break
+				}
+			}
+			s.mu.RUnlock()
+			if !viva {
+				return
+			}
+			s.pedirChave(sala, f)
+		}
+	}()
 }
 
 func (s *SFU) removerFaixa(sala string, f *faixaEncaminhada) {
