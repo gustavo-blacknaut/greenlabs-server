@@ -4,7 +4,7 @@
         "version": "PTDL_v2",
         "update_url": null
     },
-    "exported_at": "2026-08-26T13:59:49.898Z",
+    "exported_at": "2026-08-26T14:30:34.386Z",
     "name": "GreenLabs — Servidor de Sinalização",
     "author": "gustavo.c.raichardt@gmail.com",
     "description": "Servidor de sinalização do GreenLabs, para transmissão de tela e chamadas sem conta. Com o SFU ligado o vídeo passa por aqui e a travessia de roteador deixa de ser problema; desligado, o servidor só apresenta as pessoas umas às outras e gasta quase nada.",
@@ -22,7 +22,7 @@
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/bash\n# Instalação do GreenLabs no Pterodactyl.\n#\n# Compila do fonte de propósito. Baixar o binário da release parecia mais\n# rápido, mas o servidor ignora flag que não conhece em silêncio: uma release\n# antiga aceitaria --sfu, não ligaria nada, e não haveria erro nenhum para\n# indicar isso. Compilando, o binário e as flags são sempre da mesma versão.\nset -e\n\nREPO=\"https://github.com/gustavo-blacknaut/greenlabs-server.git\"\nREF=\"${VERSAO:-main}\"\n\necho \"GreenLabs — instalando a partir de ${REF}\"\n\napt-get update -qq\napt-get install -y -qq git ca-certificates >/dev/null\n\nrm -rf /tmp/fonte\ngit clone --depth 1 --branch \"${REF}\" \"${REPO}\" /tmp/fonte 2>/dev/null \\\n  || git clone --depth 1 \"${REPO}\" /tmp/fonte\n\ncd /tmp/fonte\necho \"Commit: $(git rev-parse --short HEAD)\"\n\n# CGO desligado: o binário sai estático e roda em qualquer imagem, sem depender\n# das bibliotecas do sistema em que foi compilado.\nCGO_ENABLED=0 go build -trimpath -ldflags \"-s -w\" -o /mnt/server/greenlabs-server .\n\ninstall -m 0755 pterodactyl/iniciar.sh /mnt/server/iniciar.sh\nchmod +x /mnt/server/greenlabs-server\n\necho\necho \"Pronto. Versão instalada:\"\n/mnt/server/greenlabs-server --help | head -1\n",
+            "script": "#!/bin/bash\n# Instalação do GreenLabs no Pterodactyl.\n#\n# Baixa o binário pronto da release direto para a máquina que vai hospedar.\n# É um arquivo estático de ~10 MB: nada de Go, nada de compilar, nada de\n# runtime instalado na host.\n#\n# Antes de aceitar o binário, pergunta a ele quais flags conhece. Isso existe\n# porque o servidor ignora flag desconhecida em silêncio: uma release velha\n# aceitaria --sfu, não ligaria nada e não daria erro nenhum. Quando o binário\n# não passa nessa conferência, o script compila do fonte em vez de instalar um\n# servidor que ignoraria a escolha feita no painel.\nset -e\n\nDONO=\"gustavo-blacknaut\"\nREPO=\"greenlabs-server\"\nALVO=\"/mnt/server/greenlabs-server\"\n\napt-get update -qq\napt-get install -y -qq curl jq ca-certificates git >/dev/null\n\ncase \"$(uname -m)\" in\n  x86_64 | amd64) ARQUITETURA=\"amd64\" ;;\n  aarch64 | arm64) ARQUITETURA=\"arm64\" ;;\n  *) echo \"arquitetura $(uname -m) sem binário pronto; vai compilar\"; ARQUITETURA=\"\" ;;\nesac\n\n# VERSAO em branco ou \"latest\" pega a release mais nova; qualquer outra coisa é\n# tratada como tag.\nVERSAO=\"${VERSAO:-latest}\"\nif [ \"${VERSAO}\" = \"latest\" ]; then\n  API=\"https://api.github.com/repos/${DONO}/${REPO}/releases/latest\"\nelse\n  API=\"https://api.github.com/repos/${DONO}/${REPO}/releases/tags/${VERSAO}\"\nfi\n\nbaixou=0\nif [ -n \"${ARQUITETURA}\" ]; then\n  echo \"Procurando release (${VERSAO}, linux-${ARQUITETURA})...\"\n  URL=$(curl -fsSL \"${API}\" 2>/dev/null \\\n        | jq -r --arg a \"linux-${ARQUITETURA}\" \\\n            '.assets[]? | select(.name | endswith($a)) | .browser_download_url' \\\n        | head -1)\n\n  if [ -n \"${URL}\" ] && [ \"${URL}\" != \"null\" ]; then\n    echo \"Baixando ${URL}\"\n    curl -fsSL -o \"${ALVO}\" \"${URL}\" && chmod +x \"${ALVO}\" && baixou=1\n  else\n    echo \"Nenhum binário linux-${ARQUITETURA} nessa release.\"\n  fi\nfi\n\n# O binário baixado só vale se conhecer as flags que o painel vai passar.\nif [ \"${baixou}\" = \"1\" ]; then\n  AJUDA=\"$(\"${ALVO}\" --help 2>&1 || true)\"\n  if echo \"${AJUDA}\" | grep -q -- \"--sfu\"; then\n    echo \"Binário da release serve: conhece --sfu.\"\n  else\n    echo \"A release baixada e antiga demais - nao conhece --sfu.\"\n    echo \"Compilando do fonte para o servidor nao subir sem o modo que voce escolheu.\"\n    baixou=0\n  fi\nfi\n\nif [ \"${baixou}\" != \"1\" ]; then\n  REF=\"${VERSAO}\"\n  [ \"${REF}\" = \"latest\" ] && REF=\"main\"\n\n  echo \"Compilando a partir de ${REF}...\"\n  rm -rf /tmp/fonte\n  git clone --depth 1 --branch \"${REF}\" \"https://github.com/${DONO}/${REPO}.git\" /tmp/fonte 2>/dev/null \\\n    || git clone --depth 1 \"https://github.com/${DONO}/${REPO}.git\" /tmp/fonte\n\n  cd /tmp/fonte\n  echo \"Commit: $(git rev-parse --short HEAD)\"\n\n  # CGO desligado: o binário sai estático e roda em qualquer imagem, sem\n  # depender das bibliotecas do sistema em que foi compilado.\n  CGO_ENABLED=0 go build -trimpath -ldflags \"-s -w\" -o \"${ALVO}\" .\n  chmod +x \"${ALVO}\"\nfi\n\n# O iniciar.sh vem sempre do fonte: é ele que traduz as variáveis do painel.\nrm -rf /tmp/scripts\ngit clone --depth 1 \"https://github.com/${DONO}/${REPO}.git\" /tmp/scripts >/dev/null 2>&1\ninstall -m 0755 /tmp/scripts/pterodactyl/iniciar.sh /mnt/server/iniciar.sh\n\necho\necho \"Instalado:\"\n\"${ALVO}\" --help | head -1\n",
             "container": "golang:1.24-bookworm",
             "entrypoint": "bash"
         }
@@ -39,10 +39,20 @@
             "field_type": "text"
         },
         {
+            "name": "Porta",
+            "description": "Deixe em branco para usar a porta que o painel alocou — é o normal e o que funciona sempre.\n\nPara escolher outra, digite o número. Ela precisa estar nas alocações deste servidor: porta que não está alocada não é encaminhada até aqui, e o servidor sobe sem ninguém conseguir chegar nele.",
+            "env_variable": "PORTA",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|integer|between:1,65535",
+            "field_type": "text"
+        },
+        {
             "name": "Versão",
-            "description": "Branch ou tag do repositório a compilar. Deixe em \"main\" para a mais recente. Mudar aqui só tem efeito ao reinstalar o servidor.",
+            "description": "Deixe em \"latest\" para instalar a release mais recente. Também aceita uma tag (v0.2.0) ou o nome de uma branch.\n\nA instalação baixa o binário pronto e confere se ele conhece as flags que o painel vai passar. Se for antigo demais, compila do fonte em vez de subir um servidor que ignoraria a sua escolha de SFU em silêncio.\n\nMudar aqui só tem efeito ao reinstalar o servidor.",
             "env_variable": "VERSAO",
-            "default_value": "main",
+            "default_value": "latest",
             "user_viewable": true,
             "user_editable": true,
             "rules": "required|string|max:40",

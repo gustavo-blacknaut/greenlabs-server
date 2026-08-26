@@ -185,24 +185,30 @@ Em [`pterodactyl/egg-greenlabs.json`](pterodactyl/egg-greenlabs.json).
 
 1. No painel: **Admin → Nests → Import Egg** e envie o arquivo
 2. Crie o servidor com esse egg
-3. Em **Startup**, deixe `SFU` em `1`
+3. Em **Startup**, ajuste o que quiser
 4. Ligue
 
-Só isso. O egg compila do fonte na instalação e liga o servidor com a porta que
-o painel alocou. O endereço para os seus amigos é o que aparece em
-**alocação**, no formato `ws://endereco:porta`.
+A instalação baixa o binário pronto direto para a máquina — um arquivo estático
+de ~10 MB, sem Go, sem runtime, sem compilar. O endereço para os seus amigos é o
+que aparece em **alocação**, no formato `ws://endereco:porta`.
 
-As duas variáveis que ele expõe:
+| Variável | Padrão   | O que faz                                                     |
+| -------- | -------- | ------------------------------------------------------------- |
+| `SFU`    | `1`      | `1` liga o retransmissor, `0` desliga                          |
+| `PORTA`  | *branco* | em branco usa a porta alocada pelo painel; ou escolha uma      |
+| `VERSAO` | `latest` | release a instalar; aceita tag (`v0.2.0`) ou nome de branch    |
 
-| Variável | Padrão | O que faz                                        |
-| -------- | ------ | ------------------------------------------------ |
-| `SFU`    | `1`    | `1` liga o retransmissor, `0` desliga            |
-| `VERSAO` | `main` | branch ou tag a compilar; só vale ao reinstalar  |
+**Sobre a porta.** Em branco é o normal e o que sempre funciona. Se escolher
+outra, ela precisa estar nas alocações deste servidor — porta que não está
+alocada não é encaminhada até aqui, e o servidor sobe sem ninguém conseguir
+chegar nele. O console avisa quando você escolheu uma diferente da principal.
 
-Ele compila em vez de baixar o binário pronto de propósito: o servidor **ignora
-flag que não conhece, em silêncio**. Uma release antiga aceitaria `--sfu` sem
-ligar nada e sem dar erro. Compilando, binário e flags são sempre da mesma
-versão.
+**Uma proteção que vale conhecer.** Depois de baixar, o instalador pergunta ao
+binário quais flags ele conhece. Se a release for antiga a ponto de não ter
+`--sfu`, ele compila do fonte em vez de instalar aquele binário. Sem essa
+conferência o painel mandaria `--sfu`, o servidor ignoraria em silêncio — flag
+desconhecida não gera erro — e você teria a sala funcionando com a tela preta,
+sem nada apontando o motivo.
 
 ### Pterodactyl na mão
 

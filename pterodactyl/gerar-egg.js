@@ -38,6 +38,8 @@ const egg = {
   scripts: {
     installation: {
       script: ler('instalar.sh'),
+      // Imagem com Go: o caminho normal e so baixar o binario, mas quando a
+      // release esta velha demais o script compila, e ai precisa do toolchain.
       container: 'golang:1.24-bookworm',
       entrypoint: 'bash',
     },
@@ -61,12 +63,31 @@ const egg = {
       field_type: 'text',
     },
     {
+      name: 'Porta',
+      description:
+        'Deixe em branco para usar a porta que o painel alocou — é o normal e o que funciona ' +
+        'sempre.\n\n' +
+        'Para escolher outra, digite o número. Ela precisa estar nas alocações deste servidor: ' +
+        'porta que não está alocada não é encaminhada até aqui, e o servidor sobe sem ninguém ' +
+        'conseguir chegar nele.',
+      env_variable: 'PORTA',
+      default_value: '',
+      user_viewable: true,
+      user_editable: true,
+      rules: 'nullable|integer|between:1,65535',
+      field_type: 'text',
+    },
+    {
       name: 'Versão',
       description:
-        'Branch ou tag do repositório a compilar. Deixe em "main" para a mais recente. ' +
+        'Deixe em "latest" para instalar a release mais recente. Também aceita uma tag ' +
+        '(v0.2.0) ou o nome de uma branch.\n\n' +
+        'A instalação baixa o binário pronto e confere se ele conhece as flags que o painel ' +
+        'vai passar. Se for antigo demais, compila do fonte em vez de subir um servidor que ' +
+        'ignoraria a sua escolha de SFU em silêncio.\n\n' +
         'Mudar aqui só tem efeito ao reinstalar o servidor.',
       env_variable: 'VERSAO',
-      default_value: 'main',
+      default_value: 'latest',
       user_viewable: true,
       user_editable: true,
       rules: 'required|string|max:40',
