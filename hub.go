@@ -211,11 +211,15 @@ func (h *Hub) entrar(p *Peer, m *mensagemEntrada) {
 
 	registrar("ENTROU: sala=%s id=%s nome=%s total=%d", sala, p.id, nome, total)
 
-	// Com SFU, quem entra negocia só com o servidor. A lista de pares vai
-	// vazia de propósito: se fossem apresentados uns aos outros, cada cliente
-	// abriria conexão direta com todos e o retransmissor não serviria para nada.
+	// A lista de pares continua indo em modo SFU: ela é o que faz as pessoas
+	// aparecerem umas para as outras na tela. Antes ia vazia, para ninguém
+	// abrir conexão direta - só que aí a sala parecia deserta.
+	//
+	// Quem resolve isso é o campo "sfu" abaixo: com ele o cliente sabe que a
+	// lista é para mostrar, não para negociar. Cliente antigo, que não conhece
+	// o campo, vai oferecer para os pares como sempre fez e cair na malha -
+	// funciona igual, só sem a economia do retransmissor.
 	if h.sfu != nil {
-		jaEstavam = nil
 		if err := h.sfu.Entrar(sala, p.id, func(bruto []byte) { p.enviar(comCampoFrom(bruto, IDdoSFU)) }); err != nil {
 			registrar("[sfu] nao foi possivel abrir a midia para %s: %v", p.id, err)
 		}
@@ -239,6 +243,9 @@ func (h *Hub) entrar(p *Peer, m *mensagemEntrada) {
 	}
 	b.WriteString(`],"count":`)
 	b.WriteString(strconv.Itoa(total))
+	if h.sfu != nil {
+		b.WriteString(`,"sfu":true`)
+	}
 	b.WriteByte('}')
 	p.enviar(b.Bytes())
 
