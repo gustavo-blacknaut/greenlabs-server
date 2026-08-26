@@ -2,89 +2,130 @@
 # Instalação do GreenLabs no Pterodactyl.
 #
 # Baixa o binário pronto da release direto para a máquina que vai hospedar.
-# É um arquivo estático de ~10 MB: nada de Go, nada de compilar, nada de
-# runtime instalado na host.
+# É um arquivo estático de ~10 MB: nada de runtime instalado na host.
 #
-# Antes de aceitar o binário, pergunta a ele quais flags conhece. Isso existe
-# porque o servidor ignora flag desconhecida em silêncio: uma release velha
-# aceitaria --sfu, não ligaria nada e não daria erro nenhum. Quando o binário
-# não passa nessa conferência, o script compila do fonte em vez de instalar um
-# servidor que ignoraria a escolha feita no painel.
-set -e
+# Não usa a API do GitHub nem jq de propósito. A API tem limite de 60 chamadas
+# por hora por IP quando não autenticada, e num host compartilhado esse limite
+# é de outra pessoa também — a instalação falharia sem motivo aparente. O
+# endereço /releases/latest/download/NOME redireciona sozinho para a release
+# mais nova, sem chamada de API e sem depender de nenhum programa a mais.
+set -euo pipefail
 
 DONO="gustavo-blacknaut"
 REPO="greenlabs-server"
 ALVO="/mnt/server/greenlabs-server"
 
-apt-get update -qq
-apt-get install -y -qq curl jq ca-certificates git >/dev/null
+VERSAO="${VERSAO:-latest}"
+
+passo() { echo; echo "==> $*"; }
+
+passo "Ambiente"
+echo "    arquitetura: $(uname -m)"
+echo "    versao pedida: ${VERSAO}"
 
 case "$(uname -m)" in
-  x86_64 | amd64) ARQUITETURA="amd64" ;;
-  aarch64 | arm64) ARQUITETURA="arm64" ;;
-  *) echo "arquitetura $(uname -m) sem binário pronto; vai compilar"; ARQUITETURA="" ;;
+  x86_64 | amd64) ARQUIVO="greenlabs-server-linux-amd64" ;;
+  aarch64 | arm64) ARQUIVO="greenlabs-server-linux-arm64" ;;
+  *) ARQUIVO="" ;;
 esac
 
-# VERSAO em branco ou "latest" pega a release mais nova; qualquer outra coisa é
-# tratada como tag.
-VERSAO="${VERSAO:-latest}"
-if [ "${VERSAO}" = "latest" ]; then
-  API="https://api.github.com/repos/${DONO}/${REPO}/releases/latest"
+if [ "${VERSAO}" = "latest" ] || [ -z "${VERSAO}" ]; then
+  BASE="https://github.com/${DONO}/${REPO}/releases/latest/download"
 else
-  API="https://api.github.com/repos/${DONO}/${REPO}/releases/tags/${VERSAO}"
+  BASE="https://github.com/${DONO}/${REPO}/releases/download/${VERSAO}"
 fi
 
 baixou=0
-if [ -n "${ARQUITETURA}" ]; then
-  echo "Procurando release (${VERSAO}, linux-${ARQUITETURA})..."
-  URL=$(curl -fsSL "${API}" 2>/dev/null \
-        | jq -r --arg a "linux-${ARQUITETURA}" \
-            '.assets[]? | select(.name | endswith($a)) | .browser_download_url' \
-        | head -1)
-
-  if [ -n "${URL}" ] && [ "${URL}" != "null" ]; then
-    echo "Baixando ${URL}"
-    curl -fsSL -o "${ALVO}" "${URL}" && chmod +x "${ALVO}" && baixou=1
+if [ -n "${ARQUIVO}" ]; then
+  passo "Baixando ${ARQUIVO}"
+  echo "    ${BASE}/${ARQUIVO}"
+  # -L segue o redirecionamento do /latest/ para a tag de verdade.
+  if curl -fsSL --retry 3 --retry-delay 2 -o "${ALVO}" "${BASE}/${ARQUIVO}"; then
+    chmod +x "${ALVO}"
+    echo "    ok, $(stat -c%s "${ALVO}") bytes"
+    baixou=1
   else
-    echo "Nenhum binário linux-${ARQUITETURA} nessa release."
+    echo "    nao deu para baixar"
   fi
+else
+  echo "    sem binario pronto para $(uname -m)"
 fi
 
-# O binário baixado só vale se conhecer as flags que o painel vai passar.
+# O binário só vale se conhecer as flags que o painel vai passar. O servidor
+# ignora flag desconhecida em silêncio: uma release velha aceitaria --sfu, não
+# ligaria nada e não daria erro nenhum.
 if [ "${baixou}" = "1" ]; then
+  passo "Conferindo as flags"
   AJUDA="$("${ALVO}" --help 2>&1 || true)"
   if echo "${AJUDA}" | grep -q -- "--sfu"; then
-    echo "Binário da release serve: conhece --sfu."
+    echo "    ok: conhece --sfu"
   else
-    echo "A release baixada e antiga demais - nao conhece --sfu."
-    echo "Compilando do fonte para o servidor nao subir sem o modo que voce escolheu."
+    echo "    release antiga demais, nao conhece --sfu"
     baixou=0
   fi
 fi
 
 if [ "${baixou}" != "1" ]; then
+  passo "Compilando do fonte"
   REF="${VERSAO}"
-  [ "${REF}" = "latest" ] && REF="main"
+  { [ "${REF}" = "latest" ] || [ -z "${REF}" ]; } && REF="main"
 
-  echo "Compilando a partir de ${REF}..."
+  if ! command -v go >/dev/null 2>&1; then
+    echo "ERRO: sem binario pronto e sem Go nesta imagem para compilar."
+    echo "      Use a imagem de instalacao golang:1.24-bookworm."
+    exit 1
+  fi
+
   rm -rf /tmp/fonte
   git clone --depth 1 --branch "${REF}" "https://github.com/${DONO}/${REPO}.git" /tmp/fonte 2>/dev/null \
     || git clone --depth 1 "https://github.com/${DONO}/${REPO}.git" /tmp/fonte
 
   cd /tmp/fonte
-  echo "Commit: $(git rev-parse --short HEAD)"
+  echo "    commit $(git rev-parse --short HEAD)"
 
-  # CGO desligado: o binário sai estático e roda em qualquer imagem, sem
-  # depender das bibliotecas do sistema em que foi compilado.
+  # CGO desligado: binário estático, roda em qualquer imagem sem depender das
+  # bibliotecas de onde foi compilado.
   CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "${ALVO}" .
   chmod +x "${ALVO}"
 fi
 
-# O iniciar.sh vem sempre do fonte: é ele que traduz as variáveis do painel.
-rm -rf /tmp/scripts
-git clone --depth 1 "https://github.com/${DONO}/${REPO}.git" /tmp/scripts >/dev/null 2>&1
-install -m 0755 /tmp/scripts/pterodactyl/iniciar.sh /mnt/server/iniciar.sh
+# O iniciar.sh traduz as variáveis do painel em linha de comando. Vem embutido
+# aqui, e não clonado, para a instalação não depender do repositório uma
+# segunda vez depois de já ter o binário.
+passo "Instalando o iniciador"
+cat > /mnt/server/iniciar.sh <<'INICIADOR'
+#!/bin/bash
+set -e
+cd "$(dirname "$0")"
 
+PORTA_ESCOLHIDA="${PORTA//[^0-9]/}"
+if [ -n "${PORTA_ESCOLHIDA}" ] && [ "${PORTA_ESCOLHIDA}" -ge 1 ] && [ "${PORTA_ESCOLHIDA}" -le 65535 ]; then
+  PORTA_FINAL="${PORTA_ESCOLHIDA}"
+else
+  PORTA_FINAL="${SERVER_PORT:-25640}"
+  [ -n "${PORTA:-}" ] && AVISO="PORTA='${PORTA}' nao e um numero valido; usando ${PORTA_FINAL}"
+fi
+
+ARGUMENTOS=(--port "${PORTA_FINAL}")
+
+case "${SFU,,}" in
+  1 | true | sim | ligado)
+    ARGUMENTOS+=(--sfu)
+    MODO="SFU ligado - o video passa por este servidor"
+    ;;
+  *)
+    MODO="SFU desligado - o video vai direto entre as pessoas"
+    ;;
+esac
+
+echo "GreenLabs | porta ${PORTA_FINAL} | ${MODO}"
+[ -n "${AVISO:-}" ] && echo "         ${AVISO}"
 echo
-echo "Instalado:"
+
+exec ./greenlabs-server "${ARGUMENTOS[@]}"
+INICIADOR
+chmod +x /mnt/server/iniciar.sh
+
+passo "Pronto"
 "${ALVO}" --help | head -1
+ls -la /mnt/server/greenlabs-server /mnt/server/iniciar.sh

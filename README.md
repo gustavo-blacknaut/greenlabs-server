@@ -202,12 +202,14 @@ que aparece em **alocação**, no formato `ws://endereco:porta`.
 Preencha só se quiser outra — e ela precisa estar liberada para este servidor,
 senão ele sobe e ninguém consegue chegar nele.
 
-**Uma proteção que vale conhecer.** Depois de baixar, o instalador pergunta ao
-binário quais flags ele conhece. Se a release for antiga a ponto de não ter
-`--sfu`, ele compila do fonte em vez de instalar aquele binário. Sem essa
-conferência o painel mandaria `--sfu`, o servidor ignoraria em silêncio — flag
-desconhecida não gera erro — e você teria a sala funcionando com a tela preta,
-sem nada apontando o motivo.
+**Duas coisas que ele faz por baixo.** Baixa pelo endereço
+`/releases/latest/download/`, que o próprio GitHub redireciona para a release
+mais nova — sem chamar a API, que tem limite de 60 requisições por hora por IP e
+num host compartilhado é um limite que você divide com estranhos. E depois de
+baixar, pergunta ao binário quais flags ele conhece: se a release for antiga a
+ponto de não ter `--sfu`, compila do fonte. Sem essa conferência o painel
+mandaria `--sfu`, o servidor ignoraria em silêncio — flag desconhecida não gera
+erro — e você teria a sala funcionando com a tela preta.
 
 ### Pterodactyl na mão
 
