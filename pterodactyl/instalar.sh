@@ -98,12 +98,34 @@ cat > /mnt/server/iniciar.sh <<'INICIADOR'
 set -e
 cd "$(dirname "$0")"
 
+# Sem o binário, o bash responde só "No such file or directory" e quem lê acha
+# que o iniciar.sh é que sumiu — ele existe, quem falta é o servidor. Isso
+# acontece quando a instalação não terminou: reiniciar não resolve, tem que
+# reinstalar, porque é a instalação que baixa o arquivo.
+if [ ! -f ./greenlabs-server ]; then
+  echo
+  echo "  O servidor nao esta instalado nesta pasta."
+  echo
+  echo "  O arquivo greenlabs-server nao existe em $(pwd)."
+  echo "  Isso quer dizer que a instalacao nao terminou."
+  echo
+  echo "  Va em Settings -> Reinstall Server no painel. Reiniciar nao resolve:"
+  echo "  e a instalacao que baixa o binario."
+  echo
+  exit 1
+fi
+
+if [ ! -x ./greenlabs-server ]; then
+  echo "  Sem permissao de execucao no greenlabs-server; ajustando."
+  chmod +x ./greenlabs-server || true
+fi
+
 PORTA_ESCOLHIDA="${PORTA//[^0-9]/}"
 if [ -n "${PORTA_ESCOLHIDA}" ] && [ "${PORTA_ESCOLHIDA}" -ge 1 ] && [ "${PORTA_ESCOLHIDA}" -le 65535 ]; then
   PORTA_FINAL="${PORTA_ESCOLHIDA}"
 else
   PORTA_FINAL="${SERVER_PORT:-25640}"
-  [ -n "${PORTA:-}" ] && AVISO="PORTA='${PORTA}' nao e um numero valido; usando ${PORTA_FINAL}"
+  [ -n "${PORTA:-}" ] && AVISO="PORTA='${PORTA}' não é um número válido; usando ${PORTA_FINAL}"
 fi
 
 ARGUMENTOS=(--port "${PORTA_FINAL}")
@@ -111,14 +133,14 @@ ARGUMENTOS=(--port "${PORTA_FINAL}")
 case "${SFU,,}" in
   1 | true | sim | ligado)
     ARGUMENTOS+=(--sfu)
-    MODO="SFU ligado - o video passa por este servidor"
+    MODO="SFU ligado — o vídeo passa por este servidor"
     ;;
   *)
-    MODO="SFU desligado - o video vai direto entre as pessoas"
+    MODO="SFU desligado — o vídeo vai direto entre as pessoas"
     ;;
 esac
 
-echo "GreenLabs | porta ${PORTA_FINAL} | ${MODO}"
+echo "GreenLabs · porta ${PORTA_FINAL} · ${MODO}"
 [ -n "${AVISO:-}" ] && echo "         ${AVISO}"
 echo
 
