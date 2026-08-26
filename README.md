@@ -179,6 +179,25 @@ porque ninguém é apresentado a ninguém.
 
 ## Hospedando
 
+### Pterodactyl sem egg (o jeito mais curto)
+
+Não precisa importar nada nem mexer em arquivo. Pegue **qualquer** servidor já
+existente no painel e troque só o comando de inicialização por este:
+
+```
+bash -c '[ -f greenlabs-server ] || curl -fsSL -o greenlabs-server https://github.com/gustavo-blacknaut/greenlabs-server/releases/latest/download/greenlabs-server-linux-amd64; chmod +x greenlabs-server; ./greenlabs-server --port {{SERVER_PORT}} --sfu'
+```
+
+Ligue. Ele baixa o binário na primeira vez e reaproveita nas seguintes — a
+condição `[ -f ... ]` é o que evita rebaixar 10 MB a cada reinício.
+
+Para desligar o SFU, tire o `--sfu` do fim. Em host ARM, troque `linux-amd64`
+por `linux-arm64`.
+
+Serve bem quando o painel não deixa importar egg, ou para conferir se o
+problema está no egg ou em outro lugar: se funcionar assim, o servidor está
+bem e a instalação do egg é que falhou.
+
 ### Pterodactyl (egg pronto)
 
 Em [`pterodactyl/egg-greenlabs.json`](pterodactyl/egg-greenlabs.json).
