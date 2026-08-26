@@ -1,6 +1,6 @@
 # GreenLabs — Servidor de Sinalização (Go)
 
-Servidor de sinalização WebRTC do [GreenLabs](https://github.com/gustavo-blacknaut/greenlabs-live-streaming),
+Servidor de sinalização WebRTC do [GreenLabs](https://github.com/gustavo-blacknaut/greenlabs-desktop),
 escrito em Go. A função dele é simples:
 juntar as pessoas numa sala e passar recado entre elas até a conexão direta
 fechar.
@@ -74,7 +74,7 @@ Para medir na sua máquina, veja [Medindo](#medindo) no fim.
 ## Rodando
 
 A maneira rápida é não compilar nada: baixe o binário pronto em
-[Releases](https://github.com/gustavo-blacknaut/greenlabs-live-streaming-server-go/releases)
+[Releases](https://github.com/gustavo-blacknaut/greenlabs-server/releases)
 e execute. É um arquivo só, sem instalador, sem runtime.
 
 | Onde vai rodar                       | Arquivo                          |
@@ -99,8 +99,8 @@ Precisa do [Go 1.24 ou mais novo](https://go.dev/dl/) só na hora de compilar. A
 máquina que roda não precisa de Go, nem de Node, nem de nada.
 
 ```bash
-git clone https://github.com/gustavo-blacknaut/greenlabs-live-streaming-server-go
-cd greenlabs-live-streaming-server-go
+git clone https://github.com/gustavo-blacknaut/greenlabs-server
+cd greenlabs-server
 go build -o greenlabs-server .
 ./greenlabs-server
 ```
@@ -157,7 +157,7 @@ curl http://localhost:25640/rooms
 precisa de Node, de Java nem de runtime nenhum — é um arquivo só.
 
 **1. Suba o binário.** Baixe `greenlabs-server-linux-amd64` das
-[Releases](https://github.com/gustavo-blacknaut/greenlabs-live-streaming-server-go/releases)
+[Releases](https://github.com/gustavo-blacknaut/greenlabs-server/releases)
 e envie pelo gerenciador de arquivos do painel. Em ARM (Oracle Cloud grátis,
 por exemplo) use o `-arm64`.
 
