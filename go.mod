@@ -1,4 +1,4 @@
-module github.com/gustavo-blacknaut/greenlabs-live-streaming-server-go
+module github.com/gustavo-blacknaut/greenlabs-server
 
 go 1.24.0
 

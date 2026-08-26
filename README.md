@@ -1,25 +1,18 @@
-# GreenLabs — Servidor de Sinalização (Go)
+# GreenLabs — Servidor de Sinalização
 
-Servidor de sinalização WebRTC do [GreenLabs](https://github.com/gustavo-blacknaut/greenlabs-desktop),
-escrito em Go. A função dele é simples:
-juntar as pessoas numa sala e passar recado entre elas até a conexão direta
-fechar.
+Servidor do [GreenLabs](https://github.com/gustavo-blacknaut/greenlabs-desktop):
+junta as pessoas numa sala e mantém a chamada de pé. Um binário só, sem
+instalador e sem runtime.
 
-Ele funciona de dois jeitos, e a diferença importa:
+Roda de dois jeitos, e a escolha muda tudo — veja
+[Ligado ou desligado?](#ligado-ou-desligado):
 
-**Sem `--sfu` (padrão).** O servidor só apresenta as pessoas umas às outras e
-sai da frente. Vídeo e áudio vão direto entre elas, e aqui passa só texto: quem
-entrou, quem saiu, ofertas SDP, candidatos ICE e o ping de cada um. Consome
-quase nada — mas depende de os dois lados conseguirem se achar através dos
-roteadores.
+- **padrão** — só apresenta as pessoas e sai da frente; o vídeo vai direto
+  entre elas e o servidor consome ~8 MB
+- **`--sfu`** — o vídeo passa por aqui, o servidor recebe uma vez e reenvia
 
-**Com `--sfu`.** O vídeo passa por aqui: o servidor recebe uma vez e reenvia
-para todo mundo. Gasta banda e CPU, e em troca o upload de quem transmite para
-de crescer com o tamanho da sala e a travessia de rede deixa de ser problema.
-
-**Se você hospeda num painel ou numa VPS, use `--sfu`.** É exatamente o caso em
-que compensa. Sem a flag, quando a conexão direta falha, a sinalização funciona,
-todo mundo aparece na lista e a tela fica preta.
+**Num painel ou VPS, use `--sfu`.** Tem [egg pronto para o
+Pterodactyl](#pterodactyl-egg-pronto).
 
 ---
 
@@ -120,7 +113,7 @@ precisa mesmo falar WebRTC do lado do servidor.
 -h, --help        ajuda
 ```
 
-O `--sfu` muda bastante coisa: veja [Sobre as duas flags](#sobre-as-duas-flags).
+O `--sfu` muda bastante coisa: veja [Ligado ou desligado?](#ligado-ou-desligado).
 
 ### Porta
 
@@ -149,64 +142,88 @@ curl http://localhost:25640/rooms
 
 ---
 
+## Ligado ou desligado?
+
+O `--sfu` é a decisão que mais muda o comportamento. Sala de 5 pessoas, 1
+transmitindo em 1080p a 4 Mbps:
+
+|                                | Desligado (padrão)        | Ligado                    |
+| ------------------------------ | ------------------------- | ------------------------- |
+| Upload de quem transmite       | 16 Mbps (4 cópias)        | 4 Mbps (1 cópia)          |
+| Upload do servidor             | 0                         | 16 Mbps                   |
+| Conexões por pessoa            | 4                         | 1                         |
+| Se o roteador atrapalhar       | tela preta, sem aviso     | funciona                  |
+| RAM do servidor                | ~8 MB                     | cresce com quem assiste   |
+| Quem entra no meio             | precisa renegociar com todos | recebe do servidor     |
+
+**Desligado** o servidor só apresenta as pessoas umas às outras e sai da frente.
+Vídeo e áudio vão direto entre elas; aqui passa só texto. É o certo para quem
+hospeda em casa, para a galera da mesma rede.
+
+**Ligado** cada pessoa mantém uma conexão só, com o servidor, que recebe o vídeo
+uma vez e reenvia. O upload de quem transmite para de crescer com o tamanho da
+sala e a travessia de rede deixa de existir, porque o servidor tem endereço
+público. Custa banda e CPU daqui.
+
+**Hospedando num painel ou VPS, ligue.** É exatamente o caso em que compensa.
+
+> Sem `--sfu`, quando a conexão direta falha **não aparece erro nenhum**: a
+> sinalização funciona, todo mundo entra na sala, o ping mostra 30 ms e a tela
+> fica preta. Se é isso que está acontecendo, é essa flag.
+
+Para saber qual modo está no ar, entre com duas abas na mesma sala. Em modo SFU
+a lista de participantes que o servidor manda na entrada vem vazia de propósito,
+porque ninguém é apresentado a ninguém.
+
+---
+
 ## Hospedando
 
-### Pterodactyl
+### Pterodactyl (egg pronto)
 
-É o caminho mais fácil: qualquer egg genérico de binário serve, porque não
-precisa de Node, de Java nem de runtime nenhum — é um arquivo só.
+Em [`pterodactyl/egg-greenlabs.json`](pterodactyl/egg-greenlabs.json).
 
-**1. Suba o binário.** Baixe `greenlabs-server-linux-amd64` das
-[Releases](https://github.com/gustavo-blacknaut/greenlabs-server/releases)
-e envie pelo gerenciador de arquivos do painel. Em ARM (Oracle Cloud grátis,
-por exemplo) use o `-arm64`.
+1. No painel: **Admin → Nests → Import Egg** e envie o arquivo
+2. Crie o servidor com esse egg
+3. Em **Startup**, deixe `SFU` em `1`
+4. Ligue
 
-**2. Dê permissão de execução.** Sem isso o painel responde `permission denied`.
-No console do servidor:
+Só isso. O egg compila do fonte na instalação e liga o servidor com a porta que
+o painel alocou. O endereço para os seus amigos é o que aparece em
+**alocação**, no formato `ws://endereco:porta`.
 
-```
+As duas variáveis que ele expõe:
+
+| Variável | Padrão | O que faz                                        |
+| -------- | ------ | ------------------------------------------------ |
+| `SFU`    | `1`    | `1` liga o retransmissor, `0` desliga            |
+| `VERSAO` | `main` | branch ou tag a compilar; só vale ao reinstalar  |
+
+Ele compila em vez de baixar o binário pronto de propósito: o servidor **ignora
+flag que não conhece, em silêncio**. Uma release antiga aceitaria `--sfu` sem
+ligar nada e sem dar erro. Compilando, binário e flags são sempre da mesma
+versão.
+
+### Pterodactyl na mão
+
+Se preferir não importar o egg, use qualquer egg genérico de binário:
+
+```bash
+# no console do servidor, depois de subir o arquivo
 chmod +x greenlabs-server-linux-amd64
 ```
 
-**3. Comando de inicialização:**
+Comando de inicialização:
 
 ```
 ./greenlabs-server-linux-amd64 --port {{SERVER_PORT}} --sfu
 ```
 
-**4. Ligue o servidor** e confira a alocação — a porta que o painel mostra é a
-que os seus amigos vão digitar.
-
-Pronto. O endereço fica `ws://SEU-ENDERECO:PORTA`, igual ao que aparece na
-alocação do painel.
-
-#### Sobre as duas flags
-
-**`--port {{SERVER_PORT}}`** — o painel substitui `{{SERVER_PORT}}` pela porta
-alocada. O servidor também lê a variável `SERVER_PORT` sozinho, mas passar
-explícito é melhor: fica visível no comando e não depende do egg exportar a
-variável.
-
-**`--sfu`** — esse muda o comportamento e vale entender. Sem ele, cada pessoa
-manda o próprio vídeo direto para cada uma das outras. Numa sala de 5, quem
-transmite sobe o vídeo **4 vezes** — e os dois lados ainda precisam se achar
-através dos roteadores, o que nem sempre dá certo.
-
-Com `--sfu`, cada pessoa mantém **uma** conexão, com o servidor, que recebe uma
-vez e reenvia. O upload de quem transmite para de crescer com o tamanho da sala,
-e o problema de travessia de rede some, porque o servidor tem endereço público.
-
-O preço é real: o vídeo passa a consumir banda e CPU do servidor,
-proporcionalmente a quantas pessoas estão assistindo.
-
-**Se você hospeda num painel, deixe `--sfu` ligado.** É justamente o caso em que
-o servidor tem endereço público e as pessoas estão espalhadas. Sem a flag, o
-servidor só apresenta as pessoas umas às outras — e se a conexão direta falhar,
-a sinalização funciona, todo mundo aparece na lista, e a tela fica preta.
-
-Para conferir qual modo está no ar, entre com duas abas na mesma sala: em modo
-SFU a lista de participantes que o servidor manda na entrada vem vazia de
-propósito, porque ninguém é apresentado a ninguém.
+O binário está em
+[Releases](https://github.com/gustavo-blacknaut/greenlabs-server/releases) —
+`-arm64` para Oracle Cloud grátis e Raspberry Pi. Confira se a release é nova o
+bastante para conhecer o `--sfu`: rode `./greenlabs-server-linux-amd64 --help` e
+veja se a flag aparece na lista.
 
 ### Linux com systemd
 
@@ -214,24 +231,23 @@ propósito, porque ninguém é apresentado a ninguém.
 sudo useradd -r -s /usr/sbin/nologin greenlabs
 sudo mkdir -p /opt/greenlabs
 sudo cp greenlabs-server /opt/greenlabs/
-sudo chown -R greenlabs:greenlabs /opt/greenlabs
+sudo chown -R greenlabs: /opt/greenlabs
 ```
 
 `/etc/systemd/system/greenlabs.service`:
 
 ```ini
 [Unit]
-Description=Sinalizacao GreenLabs
+Description=GreenLabs — sinalização
 After=network.target
 
 [Service]
 Type=simple
 User=greenlabs
 WorkingDirectory=/opt/greenlabs
-Environment=PORT=25640
-ExecStart=/opt/greenlabs/greenlabs-server
+ExecStart=/opt/greenlabs/greenlabs-server --port 25640 --sfu
 Restart=always
-RestartSec=5
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
@@ -244,39 +260,44 @@ sudo journalctl -u greenlabs -f
 
 ### Docker
 
-```bash
-docker build -t greenlabs-server .
-docker run -d --name greenlabs -p 25640:25640 --restart unless-stopped greenlabs-server
+```dockerfile
+FROM golang:1.24 AS build
+WORKDIR /src
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /greenlabs-server .
+
+FROM gcr.io/distroless/static
+COPY --from=build /greenlabs-server /greenlabs-server
+EXPOSE 25640
+ENTRYPOINT ["/greenlabs-server", "--sfu"]
 ```
 
-O `Dockerfile` compila numa etapa e publica noutra a partir do `scratch`: a
-imagem final tem só o binário, sem shell nem gerenciador de pacotes. Dá em torno
-de 11 MB.
+```bash
+docker build -t greenlabs-server .
+docker run -d --restart unless-stopped -p 25640:25640 greenlabs-server
+```
 
 ### Windows
 
-```powershell
-.\greenlabs-server.exe --port 25640
-```
+Rode o `.exe` e deixe a janela aberta. Sem argumento nenhum ele pergunta a porta
+e se você quer túnel.
 
-Para deixar rodando sempre, crie uma tarefa no Agendador de Tarefas com gatilho
-"ao iniciar o computador".
-
-Lembre de liberar a porta:
+Para expor a porta na rede local:
 
 ```powershell
-New-NetFirewallRule -DisplayName "GreenLabs" -Direction Inbound -LocalPort 25640 -Protocol TCP -Action Allow
+New-NetFirewallRule -DisplayName "GreenLabs" -Direction Inbound -Protocol TCP -LocalPort 25640 -Action Allow
 ```
 
 ### Sem abrir porta no roteador
 
-**Radmin VPN ou Hamachi** — todo mundo entra na mesma rede virtual e usa o
-endereço `26.x.x.x` que o servidor imprime ao subir (esses aparecem primeiro na
-lista, marcados como VPN).
+Três saídas, da mais simples para a mais trabalhosa:
 
-**Túnel** — `./greenlabs-server --tunnel` detecta cloudflared ou ngrok e imprime
-um endereço `wss://` público. Serve para teste rápido; o endereço muda a cada
-execução.
+- **`--tunnel`** — precisa do cloudflared ou do ngrok instalado. Entrega um
+  endereço `wss://` público, que funciona até com o site em HTTPS.
+- **Radmin VPN ou Hamachi** — todo mundo entra na mesma rede virtual e usa o IP
+  que aparece na lista de endereços quando o servidor sobe.
+- **Encaminhamento de porta no roteador** — o jeito clássico, e o que mais dá
+  trabalho de explicar para os amigos.
 
 ---
 

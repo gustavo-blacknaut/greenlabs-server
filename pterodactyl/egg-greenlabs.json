@@ -1,0 +1,52 @@
+{
+    "_comment": "GreenLabs - servidor de sinalizacao. https://github.com/gustavo-blacknaut/greenlabs-server",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-08-26T13:59:49.898Z",
+    "name": "GreenLabs — Servidor de Sinalização",
+    "author": "gustavo.c.raichardt@gmail.com",
+    "description": "Servidor de sinalização do GreenLabs, para transmissão de tela e chamadas sem conta. Com o SFU ligado o vídeo passa por aqui e a travessia de roteador deixa de ser problema; desligado, o servidor só apresenta as pessoas umas às outras e gasta quase nada.",
+    "features": null,
+    "docker_images": {
+        "Debian 12": "ghcr.io/parkervcp/yolks:debian"
+    },
+    "file_denylist": [],
+    "startup": "./iniciar.sh",
+    "config": {
+        "files": "{}",
+        "startup": "{\"done\":\"Servidor de Sinalizacao GreenLabs rodando\"}",
+        "logs": "{}",
+        "stop": "^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\n# Instalação do GreenLabs no Pterodactyl.\n#\n# Compila do fonte de propósito. Baixar o binário da release parecia mais\n# rápido, mas o servidor ignora flag que não conhece em silêncio: uma release\n# antiga aceitaria --sfu, não ligaria nada, e não haveria erro nenhum para\n# indicar isso. Compilando, o binário e as flags são sempre da mesma versão.\nset -e\n\nREPO=\"https://github.com/gustavo-blacknaut/greenlabs-server.git\"\nREF=\"${VERSAO:-main}\"\n\necho \"GreenLabs — instalando a partir de ${REF}\"\n\napt-get update -qq\napt-get install -y -qq git ca-certificates >/dev/null\n\nrm -rf /tmp/fonte\ngit clone --depth 1 --branch \"${REF}\" \"${REPO}\" /tmp/fonte 2>/dev/null \\\n  || git clone --depth 1 \"${REPO}\" /tmp/fonte\n\ncd /tmp/fonte\necho \"Commit: $(git rev-parse --short HEAD)\"\n\n# CGO desligado: o binário sai estático e roda em qualquer imagem, sem depender\n# das bibliotecas do sistema em que foi compilado.\nCGO_ENABLED=0 go build -trimpath -ldflags \"-s -w\" -o /mnt/server/greenlabs-server .\n\ninstall -m 0755 pterodactyl/iniciar.sh /mnt/server/iniciar.sh\nchmod +x /mnt/server/greenlabs-server\n\necho\necho \"Pronto. Versão instalada:\"\n/mnt/server/greenlabs-server --help | head -1\n",
+            "container": "golang:1.24-bookworm",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Retransmitir o vídeo pelo servidor (SFU)",
+            "description": "Ligado (1): cada pessoa mantém uma conexão só, com este servidor, que recebe o vídeo uma vez e reenvia para os outros. Quem transmite para de subir o vídeo várias vezes e ninguém precisa atravessar o roteador do outro. Custa banda e CPU daqui.\n\nDesligado (0): o servidor só apresenta as pessoas e sai da frente. O vídeo vai direto entre elas e este servidor gasta quase nada — mas se a conexão direta falhar, todo mundo aparece na lista e a tela fica preta, sem mensagem de erro.\n\nHospedando num painel, deixe ligado.",
+            "env_variable": "SFU",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:0,1",
+            "field_type": "text"
+        },
+        {
+            "name": "Versão",
+            "description": "Branch ou tag do repositório a compilar. Deixe em \"main\" para a mais recente. Mudar aqui só tem efeito ao reinstalar o servidor.",
+            "env_variable": "VERSAO",
+            "default_value": "main",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:40",
+            "field_type": "text"
+        }
+    ]
+}
