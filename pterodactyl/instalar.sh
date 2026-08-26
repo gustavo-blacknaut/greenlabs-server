@@ -35,12 +35,27 @@ else
   BASE="https://github.com/${DONO}/${REPO}/releases/download/${VERSAO}"
 fi
 
+# curl e wget: qual existe varia com a imagem de instalação escolhida no egg, e
+# uma imagem sem o programa que o script exige falha numa linha que não explica
+# nada. Aceitar os dois tira essa dependência da escolha da imagem.
+baixar() {
+  local url="$1" destino="$2"
+  if command -v curl >/dev/null 2>&1; then
+    # -L segue o redirecionamento do /latest/ para a tag de verdade.
+    curl -fsSL --retry 3 --retry-delay 2 -o "${destino}" "${url}"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q --tries=3 -O "${destino}" "${url}"
+  else
+    echo "    nem curl nem wget nesta imagem"
+    return 1
+  fi
+}
+
 baixou=0
 if [ -n "${ARQUIVO}" ]; then
   passo "Baixando ${ARQUIVO}"
   echo "    ${BASE}/${ARQUIVO}"
-  # -L segue o redirecionamento do /latest/ para a tag de verdade.
-  if curl -fsSL --retry 3 --retry-delay 2 -o "${ALVO}" "${BASE}/${ARQUIVO}"; then
+  if baixar "${BASE}/${ARQUIVO}" "${ALVO}"; then
     chmod +x "${ALVO}"
     echo "    ok, $(stat -c%s "${ALVO}") bytes"
     baixou=1
