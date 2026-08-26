@@ -21,7 +21,10 @@ package main
 // número de espectadores. Por isso ele é opcional, ligado por --sfu.
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"encoding/json"
+	"net"
 	"sync"
 	"time"
 
@@ -66,7 +69,19 @@ type SFU struct {
 	config webrtc.Configuration
 }
 
-func NovoSFU() *SFU {
+// NovoSFU monta o retransmissor.
+//
+// portaMidia é a porta UDP em que toda a mídia entra e sai. Fixar uma só
+// importa muito em painel de jogos: lá se aloca um punhado de portas, e o
+// resto não é encaminhado. Sem isso o pion sorteia uma porta efêmera por
+// conexão, nenhuma delas chega de fora, e o participante fica com "connecting"
+// até estourar o tempo.
+//
+// enderecoPublico é o endereço que o servidor anuncia. Num container ele só
+// enxerga o próprio IP privado (172.18.0.x) e é isso que sai nos candidatos -
+// inalcançável para quem está na internet. Em branco, o servidor descobre
+// sozinho pelo STUN.
+func NovoSFU(portaMidia int, enderecoPublico string) *SFU {
 	// MediaEngine só com o que os clientes do GreenLabs falam. Registrar todos
 	// os codecs padrão faria o servidor aceitar VP8 de um lado e H.264 de outro
 	// dentro da mesma sala, e aí o reenvio não funcionaria: o SFU repassa
@@ -94,16 +109,107 @@ func NovoSFU() *SFU {
 		erroSFU("nao foi possivel registrar Opus: %v", err)
 	}
 
+	ajustes := webrtc.SettingEngine{}
+
+	if portaMidia > 0 {
+		conexao, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: portaMidia})
+		if err != nil {
+			erroSFU("nao consegui abrir a porta de midia %d: %v", portaMidia, err)
+			erroSFU("seguindo com porta sorteada; quem estiver fora da rede pode nao conectar")
+		} else {
+			ajustes.SetICEUDPMux(webrtc.NewICEUDPMux(nil, conexao))
+			infoSFU("midia em udp/%d", portaMidia)
+		}
+	}
+
+	if enderecoPublico == "" {
+		enderecoPublico = descobrirIPPublico()
+	}
+	if enderecoPublico != "" {
+		// Srflx e não Host de propósito: como host, o endereço público
+		// SUBSTITUI o local, e aí quem está na mesma rede perde o caminho
+		// curto - servidor caseiro pararia de funcionar para a própria casa.
+		// Como srflx ele é ACRESCENTADO, e os dois caminhos coexistem: quem
+		// está fora usa o público, quem está dentro usa o local.
+		ajustes.SetNAT1To1IPs([]string{enderecoPublico}, webrtc.ICECandidateTypeSrflx)
+		infoSFU("anunciando o endereco %s", enderecoPublico)
+	} else {
+		erroSFU("nao descobri o endereco publico; quem estiver fora da rede pode nao conectar")
+	}
+
 	return &SFU{
 		salas:  make(map[string]map[string]*sessaoSFU),
 		faixas: make(map[string][]*faixaEncaminhada),
-		api:    webrtc.NewAPI(webrtc.WithMediaEngine(motor)),
+		api: webrtc.NewAPI(webrtc.WithMediaEngine(motor),
+			webrtc.WithSettingEngine(ajustes)),
 		config: webrtc.Configuration{
 			ICEServers: []webrtc.ICEServer{
 				{URLs: []string{"stun:stun.l.google.com:19302"}},
 			},
 		},
 	}
+}
+
+// descobrirIPPublico pergunta a um servidor STUN qual endereço o mundo vê.
+//
+// É uma requisição STUN mínima, escrita à mão: a biblioteca só expõe isso
+// dentro de uma conexão, e aqui a resposta é necessária antes de existir
+// conexão nenhuma.
+func descobrirIPPublico() string {
+	conexao, err := net.Dial("udp", "stun.l.google.com:19302")
+	if err != nil {
+		return ""
+	}
+	defer conexao.Close()
+
+	// Binding Request: tipo 0x0001, sem atributos, com o cookie mágico.
+	pedido := make([]byte, 20)
+	binary.BigEndian.PutUint16(pedido[0:2], 0x0001)
+	binary.BigEndian.PutUint32(pedido[4:8], 0x2112A442)
+	if _, err := rand.Read(pedido[8:20]); err != nil {
+		return ""
+	}
+	if _, err := conexao.Write(pedido); err != nil {
+		return ""
+	}
+
+	_ = conexao.SetReadDeadline(time.Now().Add(3 * time.Second))
+	resposta := make([]byte, 512)
+	n, err := conexao.Read(resposta)
+	if err != nil || n < 20 {
+		return ""
+	}
+
+	// Percorre os atributos até achar XOR-MAPPED-ADDRESS (0x0020).
+	corpo := resposta[20:n]
+	for len(corpo) >= 4 {
+		tipo := binary.BigEndian.Uint16(corpo[0:2])
+		tamanho := int(binary.BigEndian.Uint16(corpo[2:4]))
+		if len(corpo) < 4+tamanho {
+			return ""
+		}
+		valor := corpo[4 : 4+tamanho]
+
+		if tipo == 0x0020 && len(valor) >= 8 && valor[1] == 0x01 {
+			// IPv4, com os bytes em XOR com o cookie.
+			ip := make(net.IP, 4)
+			for i := 0; i < 4; i++ {
+				ip[i] = valor[4+i] ^ pedido[4+i]
+			}
+			return ip.String()
+		}
+
+		// Atributos são alinhados em 4 bytes.
+		avanco := 4 + tamanho
+		if resto := avanco % 4; resto != 0 {
+			avanco += 4 - resto
+		}
+		if avanco > len(corpo) {
+			return ""
+		}
+		corpo = corpo[avanco:]
+	}
+	return ""
 }
 
 func feedbackDeVideo() []webrtc.RTCPFeedback {

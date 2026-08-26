@@ -27,9 +27,10 @@ import (
 var versao = "desenvolvimento"
 
 type opcoes struct {
-	porta int
-	tunel string
-	sfu   bool
+	porta   int
+	tunel   string
+	sfu     bool
+	publico string
 }
 
 func lerOpcoes(argumentos []string) opcoes {
@@ -50,6 +51,11 @@ func lerOpcoes(argumentos []string) opcoes {
 			}
 		case arg == "--sfu":
 			out.sfu = true
+		case arg == "--publico" && i+1 < len(argumentos):
+			out.publico = argumentos[i+1]
+			i++
+		case strings.HasPrefix(arg, "--publico="):
+			out.publico = arg[len("--publico="):]
 		case arg == "--tunnel":
 			out.tunel = "auto"
 		case strings.HasPrefix(arg, "--tunnel="):
@@ -68,6 +74,7 @@ const ajuda = `Servidor de sinalizacao GreenLabs (Go)
   --sfu             o video passa por este servidor em vez de ir direto
                     entre as pessoas: resolve quem nao consegue conectar
                     por causa do roteador, e cobra banda daqui
+  --publico IP      endereco que o servidor anuncia (padrao: descobre sozinho)
   --tunnel          abre um tunel publico com cloudflared ou ngrok
   --tunnel=ngrok    força um provedor
   -h, --help        esta ajuda
@@ -90,9 +97,14 @@ func main() {
 	mostrarMarca(versao)
 	perguntarConfiguracao(&opts)
 
+	porta := ResolverPorta(opts.porta)
+
 	var sfu *SFU
 	if opts.sfu {
-		sfu = NovoSFU()
+		// A mídia usa o MESMO número de porta, só que em UDP. TCP e UDP são
+		// espaços separados, então não há conflito com o WebSocket - e quem
+		// hospeda não precisa pedir uma segunda porta ao painel.
+		sfu = NovoSFU(porta, opts.publico)
 		fmt.Println("  " + corVerde + "SFU ligado" + corReset + corCinza +
 			": o video passa por este servidor em vez de ir direto entre as pessoas." + corReset)
 		fmt.Println("  " + corCinza + "Isso resolve quem nao consegue se conectar por causa do roteador," + corReset)
@@ -100,7 +112,7 @@ func main() {
 		fmt.Println()
 	}
 
-	servidor, err := Iniciar(ResolverPorta(opts.porta), sfu)
+	servidor, err := Iniciar(porta, sfu)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "nao foi possivel subir o servidor: %v\n", err)
 		os.Exit(1)
