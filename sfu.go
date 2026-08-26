@@ -367,8 +367,17 @@ func (s *SFU) oferecer(sessao *sessaoSFU) error {
 // aoReceberFaixa cria a cópia que será reenviada e a entrega a todo mundo que
 // já está na sala.
 func (s *SFU) aoReceberFaixa(sala, dono string, origem *webrtc.TrackRemote) {
+	// O primeiro argumento é o id da FAIXA e precisa ser único; o segundo é o id
+	// da STREAM e precisa ser o mesmo para as faixas da mesma pessoa, para o
+	// outro lado juntar áudio e vídeo num card só.
+	//
+	// Os dois eram iguais, e aí áudio e vídeo do mesmo dono tinham o mesmo id.
+	// O assinar() guarda o que já entregou em saidas[id], via que aquele id já
+	// estava lá e pulava a segunda faixa - sempre. Quem publicava áudio antes
+	// perdia o vídeo, e vice-versa. Na oferta isso aparecia como a m-line de
+	// vídeo ficando em recvonly enquanto só a de áudio virava sendrecv.
 	saida, err := webrtc.NewTrackLocalStaticRTP(origem.Codec().RTPCodecCapability,
-		"greenlabs-"+curto(dono), "greenlabs-"+curto(dono))
+		"greenlabs-"+curto(dono)+"-"+origem.Kind().String(), "greenlabs-"+curto(dono))
 	if err != nil {
 		erroSFU("nao foi possivel criar a faixa de saida: %v", err)
 		return
