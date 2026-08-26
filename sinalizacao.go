@@ -27,8 +27,10 @@ type Servidor struct {
 	Port int
 }
 
-func Iniciar(porta int) (*Servidor, error) {
-	hub := NovoHub()
+// sfu pode ser nil: sem ele o servidor so apresenta as pessoas umas as outras
+// e o video vai direto entre elas, que e o modo padrao.
+func Iniciar(porta int, sfu *SFU) (*Servidor, error) {
+	hub := NovoHub(sfu)
 	s := &Servidor{hub: hub}
 
 	mux := http.NewServeMux()

@@ -24,6 +24,7 @@ const versao = "v0.2.0"
 type opcoes struct {
 	porta int
 	tunel string
+	sfu   bool
 }
 
 func lerOpcoes(argumentos []string) opcoes {
@@ -42,6 +43,8 @@ func lerOpcoes(argumentos []string) opcoes {
 			if n, err := strconv.Atoi(arg[len("--port="):]); err == nil {
 				out.porta = n
 			}
+		case arg == "--sfu":
+			out.sfu = true
 		case arg == "--tunnel":
 			out.tunel = "auto"
 		case strings.HasPrefix(arg, "--tunnel="):
@@ -57,6 +60,9 @@ func lerOpcoes(argumentos []string) opcoes {
 const ajuda = `Servidor de sinalizacao GreenLabs (Go)
 
   --port N          porta a escutar (padrao: PORT, SERVER_PORT ou 25640)
+  --sfu             o video passa por este servidor em vez de ir direto
+                    entre as pessoas: resolve quem nao consegue conectar
+                    por causa do roteador, e cobra banda daqui
   --tunnel          abre um tunel publico com cloudflared ou ngrok
   --tunnel=ngrok    força um provedor
   -h, --help        esta ajuda
@@ -79,7 +85,17 @@ func main() {
 	mostrarMarca(versao)
 	perguntarConfiguracao(&opts)
 
-	servidor, err := Iniciar(ResolverPorta(opts.porta))
+	var sfu *SFU
+	if opts.sfu {
+		sfu = NovoSFU()
+		fmt.Println("  " + corVerde + "SFU ligado" + corReset + corCinza +
+			": o video passa por este servidor em vez de ir direto entre as pessoas." + corReset)
+		fmt.Println("  " + corCinza + "Isso resolve quem nao consegue se conectar por causa do roteador," + corReset)
+		fmt.Println("  " + corCinza + "e cobra banda e CPU daqui em troca." + corReset)
+		fmt.Println()
+	}
+
+	servidor, err := Iniciar(ResolverPorta(opts.porta), sfu)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "nao foi possivel subir o servidor: %v\n", err)
 		os.Exit(1)

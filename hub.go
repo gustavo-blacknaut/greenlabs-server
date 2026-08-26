@@ -58,6 +58,11 @@ type Hub struct {
 	pingMu    sync.Mutex
 	pingSujas map[string]struct{}
 
+	// Quando presente, os participantes não são apresentados uns aos outros:
+	// cada um negocia só com o servidor, que recebe uma vez e reenvia. É o que
+	// permite trocar malha por retransmissor sem mudar nenhum cliente.
+	sfu *SFU
+
 	iniciadoEm      string
 	totalConexoes   atomic.Uint64
 	totalRepassadas atomic.Uint64
@@ -65,8 +70,9 @@ type Hub struct {
 	encerrarUmaVez  sync.Once
 }
 
-func NovoHub() *Hub {
+func NovoHub(sfu *SFU) *Hub {
 	h := &Hub{
+		sfu:        sfu,
 		salas:      make(map[string]map[string]*Peer),
 		pingSujas:  make(map[string]struct{}),
 		iniciadoEm: time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
@@ -121,6 +127,13 @@ func (h *Hub) Tratar(p *Peer, bruto []byte) {
 	// Qualquer outra coisa é repasse ponto a ponto: SDP, ICE, controles do app.
 	sala := p.Sala()
 	if sala == "" || m.Para == "" {
+		return
+	}
+
+	// Endereçado ao servidor: é negociação de mídia com o retransmissor, não
+	// recado para outra pessoa.
+	if h.sfu != nil && m.Para == IDdoSFU {
+		h.entregarAoSFU(sala, p.id, &m, bruto)
 		return
 	}
 	h.mu.RLock()
@@ -198,6 +211,16 @@ func (h *Hub) entrar(p *Peer, m *mensagemEntrada) {
 
 	registrar("ENTROU: sala=%s id=%s nome=%s total=%d", sala, p.id, nome, total)
 
+	// Com SFU, quem entra negocia só com o servidor. A lista de pares vai
+	// vazia de propósito: se fossem apresentados uns aos outros, cada cliente
+	// abriria conexão direta com todos e o retransmissor não serviria para nada.
+	if h.sfu != nil {
+		jaEstavam = nil
+		if err := h.sfu.Entrar(sala, p.id, func(bruto []byte) { p.enviar(comCampoFrom(bruto, IDdoSFU)) }); err != nil {
+			registrar("[sfu] nao foi possivel abrir a midia para %s: %v", p.id, err)
+		}
+	}
+
 	var b bytes.Buffer
 	b.WriteString(`{"type":"joined","peerId":`)
 	b.Write(textoJSON(p.id))
@@ -263,6 +286,10 @@ func (h *Hub) Sair(p *Peer) {
 		delete(h.salas, sala)
 	}
 	h.mu.Unlock()
+
+	if h.sfu != nil {
+		h.sfu.Sair(sala, p.id)
+	}
 
 	registrar("SAIDA: sala=%s id=%s nome=%s restantes=%d", sala, p.id, nome, restantes)
 
@@ -401,4 +428,47 @@ func textoJSON(s string) []byte {
 		return []byte(`""`)
 	}
 	return b
+}
+
+// entregarAoSFU traduz a mensagem do cliente para o retransmissor.
+//
+// Os clientes falam em "sdp" (o web) ou "description" (o de Electron) para a
+// mesma coisa, então os dois nomes são aceitos - o cliente não precisa saber
+// com quem está falando.
+func (h *Hub) entregarAoSFU(sala, peer string, m *mensagemEntrada, bruto []byte) {
+	switch m.Tipo {
+	case "offer", "answer":
+		var corpo struct {
+			SDP *struct {
+				SDP string `json:"sdp"`
+			} `json:"sdp"`
+			Description *struct {
+				SDP string `json:"sdp"`
+			} `json:"description"`
+		}
+		if json.Unmarshal(bruto, &corpo) != nil {
+			return
+		}
+		sdp := ""
+		if corpo.SDP != nil {
+			sdp = corpo.SDP.SDP
+		} else if corpo.Description != nil {
+			sdp = corpo.Description.SDP
+		}
+		if sdp != "" {
+			h.sfu.Descricao(sala, peer, m.Tipo, sdp)
+		}
+
+	case "ice":
+		var corpo struct {
+			Candidate *struct {
+				Candidate string `json:"candidate"`
+				SDPMid    string `json:"sdpMid"`
+			} `json:"candidate"`
+		}
+		if json.Unmarshal(bruto, &corpo) != nil || corpo.Candidate == nil {
+			return
+		}
+		h.sfu.Candidato(sala, peer, corpo.Candidate.Candidate, corpo.Candidate.SDPMid)
+	}
 }

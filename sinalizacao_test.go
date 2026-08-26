@@ -143,7 +143,7 @@ func (c *clienteTeste) receberTipo(t *testing.T, tipo string) map[string]any {
 
 func subirServidorDeTeste(t *testing.T) *Servidor {
 	t.Helper()
-	s, err := Iniciar(0) // porta 0: o sistema escolhe uma livre
+	s, err := Iniciar(0, nil) // porta 0: o sistema escolhe uma livre; nil = sem SFU
 	if err != nil {
 		t.Fatalf("subir servidor: %v", err)
 	}
