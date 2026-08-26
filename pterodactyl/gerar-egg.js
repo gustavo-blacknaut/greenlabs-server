@@ -27,7 +27,27 @@ const egg = {
     'Debian 12': 'ghcr.io/parkervcp/yolks:debian',
   },
   file_denylist: [],
-  startup: './iniciar.sh',
+  // Tudo num comando só, do jeito que os eggs de Node fazem: o servidor se
+  // baixa se não estiver lá e sobe. Assim uma instalação que falhou não deixa
+  // o servidor inutilizado — ele se resolve no boot.
+  //
+  // Ao contrário do Node, aqui não há nada para compilar na host: o Go entrega
+  // um binário estático, completo. O npm install existe porque node_modules é
+  // específico da máquina; o equivalente aqui simplesmente não existe.
+  startup: [
+    'ARQ=greenlabs-server-linux-amd64',
+    'case $(uname -m) in aarch64|arm64) ARQ=greenlabs-server-linux-arm64;; esac',
+    'V={{VERSAO}}',
+    '[ -z "$V" ] && V=latest',
+    'if [ "$V" = latest ]; then BASE=https://github.com/gustavo-blacknaut/greenlabs-server/releases/latest/download; else BASE=https://github.com/gustavo-blacknaut/greenlabs-server/releases/download/$V; fi',
+    '[ -f greenlabs-server ] || { echo "baixando $ARQ ($V)"; curl -fsSL -o greenlabs-server $BASE/$ARQ || wget -qO greenlabs-server $BASE/$ARQ; }',
+    'chmod +x greenlabs-server 2>/dev/null',
+    'P={{PORTA}}',
+    '[ -z "$P" ] && P={{SERVER_PORT}}',
+    'F=',
+    '[ "{{SFU}}" = 1 ] && F=--sfu',
+    'exec ./greenlabs-server --port $P $F',
+  ].join('; '),
   config: {
     files: '{}',
     startup: JSON.stringify({ done: 'Servidor de Sinalizacao GreenLabs rodando' }),
@@ -38,9 +58,8 @@ const egg = {
   scripts: {
     installation: {
       script: ler('instalar.sh'),
-      // Imagem com Go: o caminho normal e so baixar o binario, mas quando a
-      // release esta velha demais o script compila, e ai precisa do toolchain.
-      container: 'golang:1.24-bookworm',
+      // Só precisa de curl ou wget: não há nada para compilar.
+      container: 'ghcr.io/parkervcp/installers:debian',
       entrypoint: 'bash',
     },
   },

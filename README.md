@@ -202,33 +202,36 @@ bem e a instalação do egg é que falhou.
 
 Em [`pterodactyl/egg-greenlabs.json`](pterodactyl/egg-greenlabs.json).
 
-1. No painel: **Admin → Nests → Import Egg** e envie o arquivo
+1. **Admin → Nests → Import Egg** e envie o arquivo
 2. Crie o servidor com esse egg
-3. Em **Startup**, ajuste o que quiser
-4. Ligue
+3. Ligue
 
-A instalação baixa o binário pronto direto para a máquina — um arquivo estático
-de ~10 MB, sem Go, sem runtime, sem compilar. O endereço para os seus amigos é o
-que aparece em **alocação**, no formato `ws://endereco:porta`.
+O servidor se baixa sozinho. **A instalação só adianta o download** — se ela
+falhar, o comando de inicialização baixa no boot e o servidor sobe igual. Não
+existe estado em que o egg instale errado e você fique travado.
 
-| Variável | Padrão   | O que faz                                                     |
-| -------- | -------- | ------------------------------------------------------------- |
-| `SFU`    | `1`      | `1` liga o retransmissor, `0` desliga                          |
-| `PORTA`  | *branco* | em branco usa a porta alocada pelo painel; ou escolha uma      |
-| `VERSAO` | `latest` | release a instalar; aceita tag (`v0.2.0`) ou nome de branch    |
+| Variável | Padrão   | O que faz                                                    |
+| -------- | -------- | ------------------------------------------------------------ |
+| `SFU`    | `1`      | `1` liga o retransmissor, `0` desliga                         |
+| `PORTA`  | *branco* | em branco usa a porta alocada pelo painel; ou escolha uma     |
+| `VERSAO` | `latest` | release a baixar; aceita uma tag (`v0.2.0`)                   |
 
 **Sobre a porta.** Em branco usa a que o painel alocou, que é o caso normal.
 Preencha só se quiser outra — e ela precisa estar liberada para este servidor,
 senão ele sobe e ninguém consegue chegar nele.
 
-**Duas coisas que ele faz por baixo.** Baixa pelo endereço
-`/releases/latest/download/`, que o próprio GitHub redireciona para a release
-mais nova — sem chamar a API, que tem limite de 60 requisições por hora por IP e
-num host compartilhado é um limite que você divide com estranhos. E depois de
-baixar, pergunta ao binário quais flags ele conhece: se a release for antiga a
-ponto de não ter `--sfu`, compila do fonte. Sem essa conferência o painel
-mandaria `--sfu`, o servidor ignoraria em silêncio — flag desconhecida não gera
-erro — e você teria a sala funcionando com a tela preta.
+#### Por que não tem "build", diferente do Node
+
+Egg de Node roda `npm install` no boot porque `node_modules` é específico da
+máquina e não dá para versionar pronto. Aqui não existe equivalente: o Go
+entrega **um binário estático, completo**. Não há dependência para resolver na
+host, nada para compilar, nada que possa quebrar por diferença de ambiente.
+
+Por isso o comando de inicialização só precisa garantir que o arquivo está lá:
+
+```
+[ -f greenlabs-server ] || baixa; exec ./greenlabs-server --port ... --sfu
+```
 
 ### Pterodactyl na mão
 
