@@ -4,3 +4,9 @@
 greenlabs-server
 carga
 dist/
+
+# Nada de binario nem pacote versionado aqui.
+*.zip
+*.tar.gz
+greenlabs-server
+greenlabs-server-*
