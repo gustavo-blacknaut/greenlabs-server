@@ -1,0 +1,10 @@
+# Shell script tem que sair com LF em qualquer sistema. Gravado com CRLF, o
+# Linux le o \r como parte do caminho do interpretador e responde
+# "bad interpreter: /bin/bash^M" - o servidor nem chega a subir.
+*.sh text eol=lf
+
+# O egg carrega os scripts embutidos; manter LF evita o mesmo problema
+# atravessar o JSON.
+*.json text eol=lf
+
+* text=auto
