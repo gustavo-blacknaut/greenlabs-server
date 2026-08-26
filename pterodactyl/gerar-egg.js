@@ -65,11 +65,9 @@ const egg = {
     {
       name: 'Porta',
       description:
-        'Deixe em branco para usar a porta que o painel alocou — é o normal e o que funciona ' +
-        'sempre.\n\n' +
-        'Para escolher outra, digite o número. Ela precisa estar nas alocações deste servidor: ' +
-        'porta que não está alocada não é encaminhada até aqui, e o servidor sobe sem ninguém ' +
-        'conseguir chegar nele.',
+        'Deixe em branco para usar a porta que o painel alocou — é o caso normal.\n\n' +
+        'Preencha só se quiser outra. Ela precisa estar liberada para este servidor, senão ' +
+        'ele sobe e ninguém consegue chegar nele.',
       env_variable: 'PORTA',
       default_value: '',
       user_viewable: true,

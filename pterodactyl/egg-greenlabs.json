@@ -4,7 +4,7 @@
         "version": "PTDL_v2",
         "update_url": null
     },
-    "exported_at": "2026-08-26T14:30:34.386Z",
+    "exported_at": "2026-08-26T14:36:47.846Z",
     "name": "GreenLabs — Servidor de Sinalização",
     "author": "gustavo.c.raichardt@gmail.com",
     "description": "Servidor de sinalização do GreenLabs, para transmissão de tela e chamadas sem conta. Com o SFU ligado o vídeo passa por aqui e a travessia de roteador deixa de ser problema; desligado, o servidor só apresenta as pessoas umas às outras e gasta quase nada.",
@@ -40,7 +40,7 @@
         },
         {
             "name": "Porta",
-            "description": "Deixe em branco para usar a porta que o painel alocou — é o normal e o que funciona sempre.\n\nPara escolher outra, digite o número. Ela precisa estar nas alocações deste servidor: porta que não está alocada não é encaminhada até aqui, e o servidor sobe sem ninguém conseguir chegar nele.",
+            "description": "Deixe em branco para usar a porta que o painel alocou — é o caso normal.\n\nPreencha só se quiser outra. Ela precisa estar liberada para este servidor, senão ele sobe e ninguém consegue chegar nele.",
             "env_variable": "PORTA",
             "default_value": "",
             "user_viewable": true,

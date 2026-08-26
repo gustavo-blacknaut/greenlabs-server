@@ -198,10 +198,9 @@ que aparece em **alocação**, no formato `ws://endereco:porta`.
 | `PORTA`  | *branco* | em branco usa a porta alocada pelo painel; ou escolha uma      |
 | `VERSAO` | `latest` | release a instalar; aceita tag (`v0.2.0`) ou nome de branch    |
 
-**Sobre a porta.** Em branco é o normal e o que sempre funciona. Se escolher
-outra, ela precisa estar nas alocações deste servidor — porta que não está
-alocada não é encaminhada até aqui, e o servidor sobe sem ninguém conseguir
-chegar nele. O console avisa quando você escolheu uma diferente da principal.
+**Sobre a porta.** Em branco usa a que o painel alocou, que é o caso normal.
+Preencha só se quiser outra — e ela precisa estar liberada para este servidor,
+senão ele sobe e ninguém consegue chegar nele.
 
 **Uma proteção que vale conhecer.** Depois de baixar, o instalador pergunta ao
 binário quais flags ele conhece. Se a release for antiga a ponto de não ter

@@ -11,18 +11,14 @@ set -e
 # arquivo testável fora do container.
 cd "$(dirname "$0")"
 
-# PORTA em branco significa "usa a que o painel alocou". Escolher outra só
-# funciona se ela também estiver nas alocações do servidor: o que não está
-# alocado não é encaminhado até aqui, e o servidor sobe sem ninguém conseguir
-# chegar nele.
+# PORTA em branco significa "usa a que o painel alocou", que é o caso normal.
 PORTA_ESCOLHIDA="${PORTA//[^0-9]/}"
 if [ -n "${PORTA_ESCOLHIDA}" ] && [ "${PORTA_ESCOLHIDA}" -ge 1 ] && [ "${PORTA_ESCOLHIDA}" -le 65535 ]; then
   PORTA_FINAL="${PORTA_ESCOLHIDA}"
-  if [ -n "${SERVER_PORT}" ] && [ "${PORTA_FINAL}" != "${SERVER_PORT}" ]; then
-    AVISO="porta ${PORTA_FINAL} escolhida na mão (a alocação principal é ${SERVER_PORT})"
-  fi
 else
   PORTA_FINAL="${SERVER_PORT:-25640}"
+  # Valor inválido cai na porta do painel. Esse aviso fica porque aqui a
+  # pessoa digitou alguma coisa e não recebeu o que pediu.
   [ -n "${PORTA}" ] && AVISO="PORTA='${PORTA}' não é um número válido; usando ${PORTA_FINAL}"
 fi
 
