@@ -35,13 +35,19 @@ const egg = {
   // um binário estático, completo. O npm install existe porque node_modules é
   // específico da máquina; o equivalente aqui simplesmente não existe.
   startup: [
-    'ARQ=greenlabs-server-linux-amd64',
-    'case $(uname -m) in aarch64|arm64) ARQ=greenlabs-server-linux-arm64;; esac',
-    'V={{VERSAO}}',
-    '[ -z "$V" ] && V=latest',
-    'if [ "$V" = latest ]; then BASE=https://github.com/gustavo-blacknaut/greenlabs-server/releases/latest/download; else BASE=https://github.com/gustavo-blacknaut/greenlabs-server/releases/download/$V; fi',
-    '[ -f greenlabs-server ] || { echo "baixando $ARQ ($V)"; curl -fsSL -o greenlabs-server $BASE/$ARQ || wget -qO greenlabs-server $BASE/$ARQ; }',
+    // Reaproveita o que já está na pasta. A checagem não é "o arquivo existe" e
+    // sim "o arquivo roda": um download interrompido deixa um arquivo com
+    // tamanho, que passaria num teste de existência e quebraria na hora de subir.
     'chmod +x greenlabs-server 2>/dev/null',
+    'if [ -s greenlabs-server ] && bash -c "./greenlabs-server --help" >/dev/null 2>&1; then echo "GreenLabs pronto, reaproveitando o que ja esta aqui"; else ' +
+      'A=amd64; case $(uname -m) in aarch64|arm64) A=arm64;; esac; ' +
+      'V={{VERSAO}}; [ -z "$V" ] && V=latest; ' +
+      'if [ "$V" = latest ]; then B=https://github.com/gustavo-blacknaut/greenlabs-server/releases/latest/download; else B=https://github.com/gustavo-blacknaut/greenlabs-server/releases/download/$V; fi; ' +
+      'echo "GreenLabs baixando (linux-$A, $V)..."; rm -f greenlabs-server; ' +
+      '{ curl -fsSL -o greenlabs-server $B/greenlabs-server-linux-$A || wget -qO greenlabs-server $B/greenlabs-server-linux-$A; } || { echo "ERRO: nao consegui baixar; confira a internet do host"; exit 1; }; ' +
+      'chmod +x greenlabs-server; ' +
+      'bash -c "./greenlabs-server --help" >/dev/null 2>&1 || { echo "ERRO: o arquivo baixado nao executa nesta maquina"; exit 1; }; ' +
+      'echo "GreenLabs instalado"; fi',
     'P={{PORTA}}',
     '[ -z "$P" ] && P={{SERVER_PORT}}',
     'F=',

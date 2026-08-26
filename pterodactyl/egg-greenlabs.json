@@ -4,7 +4,7 @@
         "version": "PTDL_v2",
         "update_url": null
     },
-    "exported_at": "2026-08-26T17:58:45.129Z",
+    "exported_at": "2026-08-26T20:07:19.926Z",
     "name": "GreenLabs — Servidor de Sinalização",
     "author": "gustavo.c.raichardt@gmail.com",
     "description": "Servidor de sinalização do GreenLabs, para transmissão de tela e chamadas sem conta. Com o SFU ligado o vídeo passa por aqui e a travessia de roteador deixa de ser problema; desligado, o servidor só apresenta as pessoas umas às outras e gasta quase nada.",
@@ -13,7 +13,7 @@
         "Debian 12": "ghcr.io/parkervcp/yolks:debian"
     },
     "file_denylist": [],
-    "startup": "ARQ=greenlabs-server-linux-amd64; case $(uname -m) in aarch64|arm64) ARQ=greenlabs-server-linux-arm64;; esac; V={{VERSAO}}; [ -z \"$V\" ] && V=latest; if [ \"$V\" = latest ]; then BASE=https://github.com/gustavo-blacknaut/greenlabs-server/releases/latest/download; else BASE=https://github.com/gustavo-blacknaut/greenlabs-server/releases/download/$V; fi; [ -f greenlabs-server ] || { echo \"baixando $ARQ ($V)\"; curl -fsSL -o greenlabs-server $BASE/$ARQ || wget -qO greenlabs-server $BASE/$ARQ; }; chmod +x greenlabs-server 2>/dev/null; P={{PORTA}}; [ -z \"$P\" ] && P={{SERVER_PORT}}; F=; [ \"{{SFU}}\" = 1 ] && F=--sfu; exec ./greenlabs-server --port $P $F",
+    "startup": "chmod +x greenlabs-server 2>/dev/null; if [ -s greenlabs-server ] && bash -c \"./greenlabs-server --help\" >/dev/null 2>&1; then echo \"GreenLabs pronto, reaproveitando o que ja esta aqui\"; else A=amd64; case $(uname -m) in aarch64|arm64) A=arm64;; esac; V={{VERSAO}}; [ -z \"$V\" ] && V=latest; if [ \"$V\" = latest ]; then B=https://github.com/gustavo-blacknaut/greenlabs-server/releases/latest/download; else B=https://github.com/gustavo-blacknaut/greenlabs-server/releases/download/$V; fi; echo \"GreenLabs baixando (linux-$A, $V)...\"; rm -f greenlabs-server; { curl -fsSL -o greenlabs-server $B/greenlabs-server-linux-$A || wget -qO greenlabs-server $B/greenlabs-server-linux-$A; } || { echo \"ERRO: nao consegui baixar; confira a internet do host\"; exit 1; }; chmod +x greenlabs-server; bash -c \"./greenlabs-server --help\" >/dev/null 2>&1 || { echo \"ERRO: o arquivo baixado nao executa nesta maquina\"; exit 1; }; echo \"GreenLabs instalado\"; fi; P={{PORTA}}; [ -z \"$P\" ] && P={{SERVER_PORT}}; F=; [ \"{{SFU}}\" = 1 ] && F=--sfu; exec ./greenlabs-server --port $P $F",
     "config": {
         "files": "{}",
         "startup": "{\"done\":\"Servidor de Sinalizacao GreenLabs rodando\"}",

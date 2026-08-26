@@ -181,24 +181,32 @@ porque ninguém é apresentado a ninguém.
 
 ### Pterodactyl sem egg (o jeito mais curto)
 
-Não precisa importar nada nem mexer em arquivo. Pegue **qualquer** servidor já
-existente no painel e troque só o comando de inicialização por este:
+Não precisa importar nada. Em **Admin → Servers → [seu servidor] → Startup**,
+troque o comando de inicialização por este e ligue:
 
 ```
-bash -c '[ -f greenlabs-server ] || curl -fsSL -o greenlabs-server https://github.com/gustavo-blacknaut/greenlabs-server/releases/latest/download/greenlabs-server-linux-amd64; chmod +x greenlabs-server; ./greenlabs-server --port {{SERVER_PORT}} --sfu'
+chmod +x greenlabs-server 2>/dev/null; if [ -s greenlabs-server ] && bash -c "./greenlabs-server --help" >/dev/null 2>&1; then echo "GreenLabs pronto, reaproveitando o que ja esta aqui"; else A=amd64; case $(uname -m) in aarch64|arm64) A=arm64;; esac; U=https://github.com/gustavo-blacknaut/greenlabs-server/releases/latest/download/greenlabs-server-linux-$A; echo "GreenLabs baixando (linux-$A)..."; rm -f greenlabs-server; { curl -fsSL -o greenlabs-server $U || wget -qO greenlabs-server $U; } || { echo "ERRO: nao consegui baixar; confira a internet do host"; exit 1; }; chmod +x greenlabs-server; bash -c "./greenlabs-server --help" >/dev/null 2>&1 || { echo "ERRO: o arquivo baixado nao executa nesta maquina"; exit 1; }; echo "GreenLabs instalado"; fi; exec ./greenlabs-server --port {{SERVER_PORT}} --sfu
 ```
 
-Ligue. Ele baixa o binário na primeira vez e reaproveita nas seguintes — a
-condição `[ -f ... ]` é o que evita rebaixar 10 MB a cada reinício.
+Funciona em qualquer servidor, mesmo criado com outro egg: só depende do
+`{{SERVER_PORT}}`, que o Pterodactyl sempre fornece. Para desligar o SFU, tire
+o `--sfu` do fim.
 
-Para desligar o SFU, tire o `--sfu` do fim. Em host ARM, troque `linux-amd64`
-por `linux-arm64`.
+O que ele cobre, em ordem:
 
-Serve bem quando o painel não deixa importar egg, ou para conferir se o
-problema está no egg ou em outro lugar: se funcionar assim, o servidor está
-bem e a instalação do egg é que falhou.
+| Situação | O que faz |
+| --- | --- |
+| Pasta vazia | baixa e sobe |
+| Já baixado | reaproveita, sem tocar na rede |
+| Download interrompido | percebe e baixa de novo |
+| Sem permissão de execução | ajusta, sem rebaixar 10 MB |
+| Sem internet | erro claro, em vez de sumir |
 
-### Pterodactyl (egg pronto)
+A checagem não é "o arquivo existe" e sim **"o arquivo roda"** — um download
+interrompido deixa um arquivo com tamanho, que passaria num teste de existência
+e quebraria só na hora de subir, com uma mensagem que não ajuda em nada.
+
+### Pterodactyl (egg pronto)### Pterodactyl (egg pronto)
 
 Em [`pterodactyl/egg-greenlabs.json`](pterodactyl/egg-greenlabs.json).
 
