@@ -38,7 +38,9 @@ jobs:
             nome="greenlabs-server-$1-$2"
             [ "$1" = "windows" ] && nome="$nome.exe"
             GOOS=$1 GOARCH=$2 CGO_ENABLED=0 \
-              go build -trimpath -ldflags "-s -w" -o "dist/$nome" .
+              go build -trimpath \
+                -ldflags "-s -w -X main.versao=${{ github.event.inputs.tag || github.ref_name }}" \
+                -o "dist/$nome" .
             echo "$nome: $(stat -c%s "dist/$nome") bytes"
           done
 
@@ -52,6 +54,17 @@ jobs:
             echo "$ajuda" | grep -q -- "$flag" || { echo "faltou $flag"; exit 1; }
           done
           echo "ok: --port, --sfu e --tunnel presentes"
+
+          # A versao precisa bater com a tag. Ela ja ficou fixa no codigo, e o
+          # binario da v0.2.2 se anunciava como v0.2.0 - com isso nao havia
+          # como saber o que estava rodando num servidor.
+          esperada="${{ github.event.inputs.tag || github.ref_name }}"
+          if ! ./dist/greenlabs-server-linux-amd64 --help | head -1 >/dev/null; then exit 1; fi
+          if ! timeout 3 ./dist/greenlabs-server-linux-amd64 --port 25999 2>&1 | grep -q "$esperada"; then
+            echo "::error::o binario nao se anuncia como $esperada"
+            exit 1
+          fi
+          echo "ok: o binario se anuncia como $esperada"
 
       - name: Publicar
         uses: softprops/action-gh-release@v2

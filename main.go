@@ -19,7 +19,12 @@ import (
 	"syscall"
 )
 
-const versao = "v0.2.0"
+// Preenchido na compilação com -ldflags "-X main.versao=vX.Y.Z". Ficava fixo
+// aqui e não acompanhava a tag: o binário da release v0.2.2 se anunciava como
+// v0.2.0, e não havia como saber qual versão estava no ar.
+//
+// O valor abaixo é o que aparece em build feito na mão, sem a flag.
+var versao = "desenvolvimento"
 
 type opcoes struct {
 	porta int
