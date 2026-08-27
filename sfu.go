@@ -126,12 +126,18 @@ func NovoSFU(portaMidia int, enderecoPublico string) *SFU {
 		enderecoPublico = descobrirIPPublico()
 	}
 	if enderecoPublico != "" {
-		// Srflx e não Host de propósito: como host, o endereço público
-		// SUBSTITUI o local, e aí quem está na mesma rede perde o caminho
-		// curto - servidor caseiro pararia de funcionar para a própria casa.
-		// Como srflx ele é ACRESCENTADO, e os dois caminhos coexistem: quem
-		// está fora usa o público, quem está dentro usa o local.
-		ajustes.SetNAT1To1IPs([]string{enderecoPublico}, webrtc.ICECandidateTypeSrflx)
+		// Host e não Srflx. Tentei srflx primeiro, para o candidato público ser
+		// ACRESCENTADO e o local continuar valendo em rede caseira. Só que o
+		// candidato srflx carrega o endereço privado do contêiner como
+		// endereço relacionado, e nem toda implementação de ICE casa o par: o
+		// navegador conectava em um segundo e o cliente em C++ ficava trinta
+		// segundos tentando até desistir.
+		//
+		// Como host o endereço público SUBSTITUI o privado. Quem hospeda em
+		// casa e chama gente da própria rede perde o caminho curto e passa a
+		// sair e voltar pelo roteador - custa um pouco de latência, e é o
+		// preço de funcionar para todo mundo.
+		ajustes.SetNAT1To1IPs([]string{enderecoPublico}, webrtc.ICECandidateTypeHost)
 		infoSFU("anunciando o endereco %s", enderecoPublico)
 	} else {
 		erroSFU("nao descobri o endereco publico; quem estiver fora da rede pode nao conectar")

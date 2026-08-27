@@ -10,3 +10,5 @@ dist/
 *.tar.gz
 greenlabs-server
 greenlabs-server-*
+
+# Configuracao local de ferramenta; nao vai para o repositorio.
