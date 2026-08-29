@@ -4,10 +4,10 @@
 
 FROM golang:1.23-alpine AS compilacao
 WORKDIR /src
-COPY go.mod ./
-COPY *.go ./
+COPY go.mod go.sum ./
+COPY src/ ./src/
 # CGO desligado: gera binário estático, que roda no scratch sem libc.
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /greenlabs-server .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /greenlabs-server ./src
 
 FROM scratch
 COPY --from=compilacao /greenlabs-server /greenlabs-server

@@ -40,7 +40,7 @@ jobs:
             GOOS=$1 GOARCH=$2 CGO_ENABLED=0 \
               go build -trimpath \
                 -ldflags "-s -w -X main.versao=${{ github.event.inputs.tag || github.ref_name }}" \
-                -o "dist/$nome" .
+                -o "dist/$nome" ./src
             echo "$nome: $(stat -c%s "dist/$nome") bytes"
           done
 

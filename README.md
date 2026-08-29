@@ -94,7 +94,7 @@ máquina que roda não precisa de Go, nem de Node, nem de nada.
 ```bash
 git clone https://github.com/gustavo-blacknaut/greenlabs-server
 cd greenlabs-server
-go build -o greenlabs-server .
+go build -o greenlabs-server ./src
 ./greenlabs-server
 ```
 
@@ -306,7 +306,7 @@ sudo journalctl -u greenlabs -f
 FROM golang:1.24 AS build
 WORKDIR /src
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /greenlabs-server .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /greenlabs-server ./src
 
 FROM gcr.io/distroless/static
 COPY --from=build /greenlabs-server /greenlabs-server
@@ -350,13 +350,13 @@ instalado do outro lado:
 
 ```bash
 # Linux x64 (a maioria dos VPS e do Pterodactyl)
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o greenlabs-server .
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o greenlabs-server ./src
 
 # Linux ARM64 (Oracle Cloud gratuito, Raspberry Pi)
-GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o greenlabs-server-arm64 .
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o greenlabs-server-arm64 ./src
 
 # Windows
-GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o greenlabs-server.exe .
+GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o greenlabs-server.exe ./src
 ```
 
 `-ldflags="-s -w"` tira a tabela de símbolos e o DWARF: o binário sai perto de
@@ -415,7 +415,7 @@ Uma vez por segundo cada sala recebe
 Três escolhas que valem uma explicação:
 
 **Sem dependência.** O WebSocket (RFC 6455) é implementado aqui, em
-[`websocket.go`](websocket.go) — handshake, quadros, fragmentação e controle.
+[`websocket.go`](src/websocket.go) — handshake, quadros, fragmentação e controle.
 São umas 300 linhas e evitam ter que baixar pacote para compilar. `git clone`
 e `go build` bastam, offline inclusive.
 
