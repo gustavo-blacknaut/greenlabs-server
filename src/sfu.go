@@ -131,6 +131,22 @@ func NovoSFU(portaMidia int, enderecoPublico string) *SFU {
 
 	ajustes := webrtc.SettingEngine{}
 
+	// O papel do DTLS deste lado fica FIXO em servidor.
+	//
+	// Quem oferece primeiro e o servidor, com setup:actpass; o cliente responde
+	// "active" e vira o cliente do DTLS, o que faz este lado ser o servidor.
+	// Mas quando e o CLIENTE que oferece depois - e ele oferece, ao comecar a
+	// transmitir - o Pion escolhia o papel de novo, do zero, e podia escolher o
+	// oposto. Trocar de papel no meio de uma conexao ja estabelecida e
+	// justamente o que o navegador recusa com:
+	//
+	//   Failed to set remote answer sdp: Failed to apply the description for
+	//   m= section with mid='0': Failed to set SSL role for the transport
+	//
+	// Compartilhar tela pelo site e pelo celular nao aparecia para ninguem por
+	// causa disto. Fixar o papel faz a renegociacao vinda do cliente valer.
+	ajustes.SetAnsweringDTLSRole(webrtc.DTLSRoleServer)
+
 	if portaMidia > 0 {
 		conexao, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: portaMidia})
 		if err != nil {
