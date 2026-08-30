@@ -1,18 +1,42 @@
-# GreenLabs — Servidor de Sinalização
+<div align="center">
 
-Servidor do [GreenLabs](https://github.com/gustavo-blacknaut/greenlabs-desktop):
-junta as pessoas numa sala e mantém a chamada de pé. Um binário só, sem
-instalador e sem runtime.
+<img src="https://raw.githubusercontent.com/gustavo-blacknaut/greenlabs-windows/main/assets/logo.png" width="96" alt="GreenLabs">
 
-Roda de dois jeitos, e a escolha muda tudo — veja
+# GreenLabs Server
+
+**Um binário. Sem instalador, sem runtime, 8 MB de RAM parado.**
+
+É ele que junta as pessoas numa sala e mantém a chamada de pé.
+
+[![Baixar](https://img.shields.io/badge/Baixar-bin%C3%A1rio%20pronto-16A34A?style=for-the-badge)](https://github.com/gustavo-blacknaut/greenlabs-server/releases/latest)
+&nbsp;
+![Go](https://img.shields.io/badge/Go-00ADD8?style=flat-square)
+![Linux · Windows · macOS](https://img.shields.io/badge/Linux%20%C2%B7%20Windows%20%C2%B7%20macOS-6B7280?style=flat-square)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square)
+
+</div>
+
+---
+
+## Começando
+
+```bash
+./greenlabs-server --sfu
+```
+
+Pronto. Agora é só passar o endereço da máquina para quem vai entrar.
+
+Ele roda de dois jeitos, e a escolha muda tudo — veja
 [Ligado ou desligado?](#ligado-ou-desligado):
 
-- **padrão** — só apresenta as pessoas e sai da frente; o vídeo vai direto
-  entre elas e o servidor consome ~8 MB
-- **`--sfu`** — o vídeo passa por aqui, o servidor recebe uma vez e reenvia
+| Modo | O que acontece | Quando usar |
+| --- | --- | --- |
+| padrão | só apresenta as pessoas e sai da frente; o vídeo vai direto entre elas | rede local, todo mundo na mesma casa |
+| **`--sfu`** | o vídeo passa por aqui: o servidor recebe uma vez e reenvia | **VPS ou painel — quase sempre este** |
 
-**Num painel ou VPS, use `--sfu`.** Tem [egg pronto para o
-Pterodactyl](#pterodactyl-egg-pronto).
+Tem [egg pronto para o Pterodactyl](#pterodactyl-egg-pronto).
+
+---
 
 ---
 
@@ -476,6 +500,17 @@ Get-Process greenlabs-server | Select-Object WorkingSet64, CPU
 ```bash
 ps -o rss,time -p $(pgrep greenlabs-server)
 ```
+
+---
+
+## O resto do GreenLabs
+
+| | |
+| --- | --- |
+| [greenlabs-desktop](https://github.com/gustavo-blacknaut/greenlabs-desktop) | Aplicativo para Windows e Linux |
+| [greenlabs-windows](https://github.com/gustavo-blacknaut/greenlabs-windows) | Cliente nativo em C++, mais leve |
+| [greenlabs-android](https://github.com/gustavo-blacknaut/greenlabs-android) | Aplicativo Android |
+| [greenlabs-site](https://github.com/gustavo-blacknaut/greenlabs-site) | Site e cliente pelo navegador |
 
 ---
 
