@@ -109,6 +109,26 @@ func NovoSFU(portaMidia int, enderecoPublico string) *SFU {
 		erroSFU("nao foi possivel registrar Opus: %v", err)
 	}
 
+	// A extensao de cabecalho "mid" no RTP.
+	//
+	// Sem ela o servidor so consegue associar um pacote a uma faixa se o SSRC
+	// tiver sido anunciado no SDP. O navegador que comeca a transmitir com
+	// replaceTrack numa m-line ja negociada NAO anuncia SSRC nenhum: ele
+	// simplesmente comeca a mandar. Sem a extensao, esses pacotes chegam e sao
+	// descartados - a tela "nao aparecia para ninguem", sem erro em lugar
+	// nenhum.
+	//
+	// Ela nao vem de graca porque nao chamamos RegisterDefaultCodecs: registrar
+	// tudo faria o servidor aceitar VP8 de um lado e H.264 de outro, e o SFU
+	// repassa pacote, nao transcodifica.
+	const midURI = "urn:ietf:params:rtp-hdrext:sdes:mid"
+	for _, tipo := range []webrtc.RTPCodecType{webrtc.RTPCodecTypeVideo, webrtc.RTPCodecTypeAudio} {
+		if err := motor.RegisterHeaderExtension(
+			webrtc.RTPHeaderExtensionCapability{URI: midURI}, tipo); err != nil {
+			erroSFU("nao foi possivel registrar a extensao mid: %v", err)
+		}
+	}
+
 	ajustes := webrtc.SettingEngine{}
 
 	if portaMidia > 0 {
