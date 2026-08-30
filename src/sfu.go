@@ -459,7 +459,25 @@ func (s *SFU) assinar(destino *sessaoSFU, f *faixaEncaminhada) {
 	destino.saidas[f.saida.ID()] = f.saida
 	destino.mu.Unlock()
 
-	if _, err := destino.conexao.AddTrack(f.saida); err != nil {
+	// AddTransceiverFromTrack, e nao AddTrack.
+	//
+	// O AddTrack REAPROVEITA um transceiver que ja exista com direcao
+	// compativel - e o unico que existe e o recvonly que abrimos para a pessoa
+	// publicar. O resultado e a m-line de envio dela virando sendrecv e passando
+	// a carregar tambem a imagem de OUTRA pessoa.
+	//
+	// O Chrome lida com isso: ele dispara ontrack quando a direcao passa a
+	// receber. O libdatachannel nao - para ele a faixa daquele mid ja existe,
+	// nenhuma faixa nova aparece, e o cliente nativo ficava com a lista de
+	// transmissoes vazia enquanto o Electron, na mesma sala, via tudo. Dava para
+	// ver no SDP: "video mid 0 sendrecv".
+	//
+	// Cada faixa encaminhada ganhando o proprio transceiver sendonly e o
+	// desenho certo de qualquer jeito: misturar o que a pessoa publica com o que
+	// ela recebe na mesma m-line e o tipo de coisa que funciona ate parar de
+	// funcionar.
+	if _, err := destino.conexao.AddTransceiverFromTrack(f.saida,
+		webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly}); err != nil {
 		erroSFU("nao foi possivel entregar a faixa a %s: %v", curto(destino.peer), err)
 	}
 }
