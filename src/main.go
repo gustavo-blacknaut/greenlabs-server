@@ -135,6 +135,31 @@ func main() {
 
 	if opts.tunel != "" {
 		provedor := ResolverProvedor(opts.tunel)
+
+		// Nada instalado: busca o cloudflared em vez de mandar instalar.
+		//
+		// "Instale cloudflared" era o fim da linha para a maior parte de quem
+		// chega aqui - e o tunel nao e um extra, e o unico jeito de o site em
+		// HTTPS alcancar um servidor caseiro, porque o navegador bloqueia ws://
+		// a partir de pagina segura. E um executavel so, sem instalador e sem
+		// conta.
+		if provedor == "" && arquivoDoCloudflared() != "" {
+			fmt.Println("  Nenhum tunnel instalado. Baixando o cloudflared (uma vez so)...")
+			caminho, err := BaixarCloudflared(func(baixado, total int64) {
+				if total > 0 {
+					fmt.Printf("\r  %.0f%% de %.1f MB   ", float64(baixado)*100/float64(total), float64(total)/(1<<20))
+				} else {
+					fmt.Printf("\r  %.1f MB   ", float64(baixado)/(1<<20))
+				}
+			})
+			fmt.Println()
+			if err != nil {
+				fmt.Printf("  Nao deu para baixar: %v\n", err)
+			} else {
+				provedor = caminho
+			}
+		}
+
 		if provedor == "" {
 			fmt.Println("  Nenhum tunnel disponivel. Instale cloudflared ou ngrok,")
 			fmt.Println("  ou use Radmin VPN / Hamachi com os enderecos acima.")

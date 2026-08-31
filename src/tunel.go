@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -82,6 +83,10 @@ func ResolverProvedor(pedido string) string {
 	if existeNoPath("ngrok") {
 		return "ngrok"
 	}
+	// Nenhum instalado, mas talvez exista a copia que baixamos antes.
+	if baixado := CloudflaredBaixado(); baixado != "" {
+		return baixado
+	}
 	return ""
 }
 
@@ -90,13 +95,21 @@ var (
 	padraoNgrok      = regexp.MustCompile(`(?i)https://[a-z0-9-]+\.ngrok[-a-z0-9.]*\.(app|io|dev)`)
 )
 
+func ehCloudflared(provedor string) bool {
+	nome := strings.ToLower(filepath.Base(provedor))
+	return strings.HasPrefix(nome, "cloudflared")
+}
+
 // IniciarTunel sobe cloudflared ou ngrok e avisa quando o endereço público
 // aparece. Os dois imprimem a URL na saída padrão, então basta acompanhar o
 // texto — não precisa de API local nem de dependência.
 func IniciarTunel(provedor string, porta int, aoAchar func(string)) (*exec.Cmd, error) {
 	var argumentos []string
 	var padrao *regexp.Regexp
-	if provedor == "cloudflared" {
+	// Pelo nome do arquivo, e nao pela string inteira: o provedor pode vir como
+	// caminho completo da copia que baixamos, e comparar com "cloudflared" daria
+	// falso - o cloudflared seria chamado com os argumentos do ngrok.
+	if ehCloudflared(provedor) {
 		argumentos = []string{"tunnel", "--url", "http://localhost:" + itoa(porta)}
 		padrao = padraoCloudflare
 	} else {
