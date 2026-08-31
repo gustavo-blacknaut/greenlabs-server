@@ -358,12 +358,76 @@ New-NetFirewallRule -DisplayName "GreenLabs" -Direction Inbound -Protocol TCP -L
 
 Três saídas, da mais simples para a mais trabalhosa:
 
-- **`--tunnel`** — precisa do cloudflared ou do ngrok instalado. Entrega um
-  endereço `wss://` público, que funciona até com o site em HTTPS.
+- **`--tunnel`** — entrega um endereço `wss://` público, que funciona até com o
+  site em HTTPS. Se não houver cloudflared nem ngrok na máquina, o cloudflared é
+  baixado na primeira vez: é um executável só, sem instalador e sem conta.
 - **Radmin VPN ou Hamachi** — todo mundo entra na mesma rede virtual e usa o IP
   que aparece na lista de endereços quando o servidor sobe.
 - **Encaminhamento de porta no roteador** — o jeito clássico, e o que mais dá
   trabalho de explicar para os amigos.
+
+---
+
+## A ponte: `wss://` para quem não tem certificado
+
+Uma página em HTTPS **não consegue** abrir `ws://`. O navegador bloqueia como
+conteúdo misto, e não existe header, framework ou configuração que mude isso —
+vale para React, HTML puro, Express, qualquer coisa. Quem hospeda em casa quase
+nunca tem certificado, e o resultado é que o site simplesmente não alcança essa
+pessoa, por mais que o servidor dela esteja no ar e funcionando.
+
+O `--tunnel` resolve para quem hospeda. A ponte resolve para quem **tem um
+servidor com endereço público** e não quer pedir um túnel a cada um:
+
+```
+navegador  --wss://-->  ponte  --ws://-->  servidor sem certificado
+```
+
+```bash
+go build -o ponte ./cmd/ponte
+./ponte -addr 127.0.0.1:4070
+```
+
+Atrás de um nginx com certificado, o endereço que as pessoas usam vira:
+
+```
+wss://ponte.seudominio.com.br/ws?alvo=servidordelas.com:25640
+```
+
+Só a sinalização passa por aí. Vídeo e áudio continuam indo direto entre os
+participantes por WebRTC, então a ponte gasta quase nada de banda — ela carrega
+texto, não mídia.
+
+### Por que ela é chata de propósito
+
+Um proxy que aceita o destino pela URL é, por padrão, um **proxy aberto**, e
+isso não é um detalhe:
+
+- `alvo=127.0.0.1:6379` alcança o Redis que roda na mesma máquina;
+- `alvo=169.254.169.254` alcança o serviço de metadados do provedor, que em
+  várias nuvens entrega credencial da instância.
+
+O firewall não protege disso — quem abre a conexão é um processo de dentro.
+
+Por isso a ponte resolve o nome **antes** de conectar e recusa se **qualquer** um
+dos IPs não for público. Olhar só o primeiro deixaria passar um nome que devolve
+um endereço público e um privado, e filtrar por texto (`começa com 192.168`) não
+serve para nada: quem quer entrar registra um domínio apontando para onde
+quiser. Além disso há faixa de portas permitida e limite de conexões por IP.
+
+| opção | padrão | o que faz |
+| --- | --- | --- |
+| `-addr` | `127.0.0.1:4070` | onde escuta; deixe no loopback, o nginx termina o TLS |
+| `-portas` | `1024-65535` | faixa de portas de destino aceita |
+| `-por-ip` | `4` | conexões simultâneas por IP de origem |
+| `-total` | `200` | conexões simultâneas no total |
+| `-ocioso` | `5m` | derruba a conexão sem tráfego por este tempo |
+
+`GET /saude` responde `{"ok":true,"abertas":N}` para monitoramento.
+
+> Quem opera a ponte vê a sinalização passar — quem entrou em qual sala, e o SDP.
+> Não vê imagem nem som, que não passam por ali. Ainda assim, é uma máquina de
+> terceiro no meio: use a sua, ou uma de quem você confia.
 
 ---
 
