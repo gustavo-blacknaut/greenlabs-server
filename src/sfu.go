@@ -153,6 +153,25 @@ func NovoSFU(portaMidia int, enderecoPublico string) *SFU {
 			erroSFU("nao consegui abrir a porta de midia %d: %v", portaMidia, err)
 			erroSFU("seguindo com porta sorteada; quem estiver fora da rede pode nao conectar")
 		} else {
+			// Buffer de recepcao grande, e nao o do sistema.
+			//
+			// Um quadro-chave de 1080p sai do encoder como centenas de pacotes
+			// praticamente juntos. Com o buffer padrao - 64 KB no Windows, 208
+			// KB em boa parte dos Linux - a rajada nao cabe, o kernel joga fora
+			// o que sobra e o quadro nunca fecha do outro lado. O sintoma
+			// engana: chegam bytes o tempo todo, mas o video fica em zero
+			// quadro por segundo, entao parece problema de codec e nao de
+			// buffer. Medido em loopback, onde nao ha rede para culpar: 23% dos
+			// pacotes perdidos a 1080p contra 0,5% a 720p.
+			//
+			// O kernel corta em silencio no teto configurado (net.core.rmem_max
+			// no Linux), entao pedir 8 MB nao garante 8 MB - garante o maior
+			// valor permitido, que ja e muito melhor que o padrao.
+			const bufferDeRecepcao = 8 << 20 // 8 MiB
+			if err := conexao.SetReadBuffer(bufferDeRecepcao); err != nil {
+				avisoSFU("nao consegui aumentar o buffer de recepcao: %v", err)
+				avisoSFU("rajadas de quadro-chave em 1080p podem perder pacote")
+			}
 			ajustes.SetICEUDPMux(webrtc.NewICEUDPMux(nil, conexao))
 			infoSFU("midia em udp/%d", portaMidia)
 		}
@@ -702,6 +721,13 @@ func infoSFU(formato string, args ...any) {
 
 func erroSFU(formato string, args ...any) {
 	registrar("[sfu] ERRO "+formato, args...)
+}
+
+// Nem tudo que da errado impede o servidor de funcionar. Buffer menor do que o
+// pedido degrada a qualidade em rajada, mas o resto continua de pe - chamar
+// isso de ERRO faria quem le o log procurar uma falha que nao existe.
+func avisoSFU(formato string, args ...any) {
+	registrar("[sfu] aviso: "+formato, args...)
 }
 
 // As mensagens saem no mesmo formato que os clientes ja falam. O campo aparece
