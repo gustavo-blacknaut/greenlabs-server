@@ -16,7 +16,7 @@ const egg = {
   _comment: 'GreenLabs - servidor de sinalizacao. https://github.com/gustavo-blacknaut/greenlabs-server',
   meta: { version: 'PTDL_v2', update_url: null },
   exported_at: new Date().toISOString(),
-  name: 'GreenLabs — Servidor de Sinalização',
+  name: 'GreenLabs - Servidor de Sinalização',
   author: 'gustavo.c.raichardt@gmail.com',
   description:
     'Servidor de sinalização do GreenLabs, para transmissão de tela e chamadas sem conta. ' +
@@ -29,7 +29,7 @@ const egg = {
   file_denylist: [],
   // Tudo num comando só, do jeito que os eggs de Node fazem: o servidor se
   // baixa se não estiver lá e sobe. Assim uma instalação que falhou não deixa
-  // o servidor inutilizado — ele se resolve no boot.
+  // o servidor inutilizado - ele se resolve no boot.
   //
   // Ao contrário do Node, aqui não há nada para compilar na host: o Go entrega
   // um binário estático, completo. O npm install existe porque node_modules é
@@ -86,7 +86,7 @@ const egg = {
         'uma vez e reenvia para os outros. Quem transmite para de subir o vídeo várias vezes e ' +
         'ninguém precisa atravessar o roteador do outro. Custa banda e CPU daqui.\n\n' +
         'Desligado (0): o servidor só apresenta as pessoas e sai da frente. O vídeo vai direto ' +
-        'entre elas e este servidor gasta quase nada — mas se a conexão direta falhar, todo ' +
+        'entre elas e este servidor gasta quase nada - mas se a conexão direta falhar, todo ' +
         'mundo aparece na lista e a tela fica preta, sem mensagem de erro.\n\n' +
         'Hospedando num painel, deixe ligado.',
       env_variable: 'SFU',
@@ -99,7 +99,7 @@ const egg = {
     {
       name: 'Porta',
       description:
-        'Deixe em branco para usar a porta que o painel alocou — é o caso normal.\n\n' +
+        'Deixe em branco para usar a porta que o painel alocou - é o caso normal.\n\n' +
         'Preencha só se quiser outra. Ela precisa estar liberada para este servidor, senão ' +
         'ele sobe e ninguém consegue chegar nele.',
       env_variable: 'PORTA',
@@ -114,7 +114,7 @@ const egg = {
       description:
         'Deixe em "latest" para a release mais recente. Para fixar uma versão, use a tag ' +
         'exata, com o "v" na frente: v0.2.0.\n\n' +
-        'Qualquer outro valor cai na mais recente — nome de branch não vale aqui, porque o ' +
+        'Qualquer outro valor cai na mais recente - nome de branch não vale aqui, porque o ' +
         'que se baixa é uma release, não o código.',
       env_variable: 'VERSAO',
       default_value: 'latest',

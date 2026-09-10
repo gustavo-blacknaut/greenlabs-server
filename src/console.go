@@ -17,7 +17,7 @@ import (
 )
 
 // Cores ANSI. O terminal do Windows entende desde a build 10586, e quando não
-// entende as sequências saem como texto invisível — não quebra nada.
+// entende as sequências saem como texto invisível - não quebra nada.
 const (
 	corReset = "\033[0m"
 	corVerde = "\033[38;2;55;255;148m"

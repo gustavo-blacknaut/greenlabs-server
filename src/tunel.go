@@ -102,7 +102,7 @@ func ehCloudflared(provedor string) bool {
 
 // IniciarTunel sobe cloudflared ou ngrok e avisa quando o endereço público
 // aparece. Os dois imprimem a URL na saída padrão, então basta acompanhar o
-// texto — não precisa de API local nem de dependência.
+// texto - não precisa de API local nem de dependência.
 func IniciarTunel(provedor string, porta int, aoAchar func(string)) (*exec.Cmd, error) {
 	var argumentos []string
 	var padrao *regexp.Regexp

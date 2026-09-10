@@ -2,14 +2,14 @@ package main
 
 // SFU: um retransmissor de mídia.
 //
-// Sem ele o GreenLabs é uma malha — cada pessoa manda o próprio vídeo direto
+// Sem ele o GreenLabs é uma malha - cada pessoa manda o próprio vídeo direto
 // para cada uma das outras. Isso tem dois problemas que aparecem juntos:
 //
 //   1. O upload de quem transmite é multiplicado pelo tamanho da sala. Numa
 //      chamada de 10 pessoas em 1080p são 40 Mbps saindo da máquina dele.
 //
 //   2. Os dois lados precisam se achar através dos roteadores. Quando a
-//      travessia de NAT falha — e falha com frequência — não há vídeo nenhum,
+//      travessia de NAT falha - e falha com frequência - não há vídeo nenhum,
 //      mesmo com a sinalização funcionando perfeitamente.
 //
 // Com o SFU cada pessoa mantém UMA conexão, com o servidor. Ele recebe uma vez

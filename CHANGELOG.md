@@ -3,7 +3,7 @@
 Mudanças do servidor de sinalização em Go, por versão. Formato livre, em
 português.
 
-## [0.1.0] — 2026-08-25
+## [0.1.0] - 2026-08-25
 
 Primeira versão. Reescreve em Go o servidor de sinalização que existia em Node,
 com o mesmo protocolo: os mesmos tipos de mensagem, os mesmos campos e as mesmas
@@ -15,7 +15,7 @@ Medido lado a lado, os dois no ar ao mesmo tempo, com 100 clientes numa sala a
 Go gastou 1,6 s de CPU contra 10,4 s, e 24 MB de RAM contra 160 MB. Parado, sem
 ninguém conectado, 8 MB contra 47 MB.
 
-Subindo para ≈100.000 msg/s o Node entregou 57% — satura perto de 55–57 mil
+Subindo para ≈100.000 msg/s o Node entregou 57% - satura perto de 55–57 mil
 mensagens por segundo, porque roda numa thread só. O Go continuou entregando
 100%. O teto dele não foi encontrado: acima disso quem não deu conta foi o
 gerador de carga na mesma máquina.

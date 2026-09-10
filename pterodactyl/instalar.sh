@@ -2,7 +2,7 @@
 # Instalação do GreenLabs no Pterodactyl.
 #
 # Só adianta o download para o primeiro boot não esperar. Se falhar aqui, o
-# comando de inicialização baixa sozinho — por isso este script não aborta a
+# comando de inicialização baixa sozinho - por isso este script não aborta a
 # instalação por nada: um egg cuja instalação falha deixa o servidor inutilizado
 # no painel, e aqui não há nada que justifique isso.
 #
@@ -23,7 +23,7 @@ else
   BASE="https://github.com/gustavo-blacknaut/greenlabs-server/releases/download/${VERSAO}"
 fi
 
-echo "GreenLabs — baixando ${ARQUIVO} (${VERSAO})"
+echo "GreenLabs - baixando ${ARQUIVO} (${VERSAO})"
 echo "  ${BASE}/${ARQUIVO}"
 
 # curl ou wget: qual existe varia com a imagem de instalação, e depender de um
@@ -47,5 +47,5 @@ else
   echo "  nao deu para baixar agora; o servidor baixa sozinho ao ligar"
 fi
 
-echo "GreenLabs — instalacao concluida"
+echo "GreenLabs - instalacao concluida"
 exit 0

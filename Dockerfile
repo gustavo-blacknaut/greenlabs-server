@@ -1,5 +1,5 @@
 # Duas etapas: compila com o Go completo, publica só o binário.
-# A imagem final não tem shell, gerenciador de pacotes nem runtime — é o
+# A imagem final não tem shell, gerenciador de pacotes nem runtime - é o
 # executável e mais nada, por volta de 11 MB.
 
 FROM golang:1.23-alpine AS compilacao

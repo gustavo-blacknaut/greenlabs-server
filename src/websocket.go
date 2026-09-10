@@ -5,7 +5,7 @@ package main
 // controle (ping, pong, close).
 //
 // É feito à mão de propósito. O servidor inteiro fica sem dependência externa,
-// então "git clone && go build" produz um binário único sem baixar nada — o que
+// então "git clone && go build" produz um binário único sem baixar nada - o que
 // importa em painel de hospedagem e em container mínimo.
 
 import (

@@ -53,7 +53,7 @@ type Hub struct {
 	// Cada cliente manda ping uma vez por segundo. No Node, cada ping disparava
 	// um broadcast para a sala inteira: n pings/s x n destinatários, ou seja
 	// tráfego crescendo com o quadrado da sala. Marcar a sala como suja e
-	// esvaziar uma vez por segundo deixa isso linear sem perder informação —
+	// esvaziar uma vez por segundo deixa isso linear sem perder informação -
 	// os clientes não pingam mais rápido que isso de qualquer forma.
 	pingMu    sync.Mutex
 	pingSujas map[string]struct{}

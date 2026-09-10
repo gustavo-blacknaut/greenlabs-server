@@ -26,13 +26,13 @@
 
 Pronto. Agora é só passar o endereço da máquina para quem vai entrar.
 
-Ele roda de dois jeitos, e a escolha muda tudo — veja
+Ele roda de dois jeitos, e a escolha muda tudo - veja
 [Ligado ou desligado?](#ligado-ou-desligado):
 
 | Modo | O que acontece | Quando usar |
 | --- | --- | --- |
 | padrão | só apresenta as pessoas e sai da frente; o vídeo vai direto entre elas | rede local, todo mundo na mesma casa |
-| **`--sfu`** | o vídeo passa por aqui: o servidor recebe uma vez e reenvia | **VPS ou painel — quase sempre este** |
+| **`--sfu`** | o vídeo passa por aqui: o servidor recebe uma vez e reenvia | **VPS ou painel - quase sempre este** |
 
 Tem [egg pronto para o Pterodactyl](#pterodactyl-egg-pronto).
 
@@ -82,7 +82,7 @@ O que muda de verdade na prática é o consumo parado: **8 MB contra 47 MB**, e
 **24 MB contra 160 MB** com uma sala cheia. Em VPS barato, em contêiner com
 limite de memória ou em slot de Pterodactyl, essa é a diferença entre caber
 folgado e ficar apertado. O resto é margem que você provavelmente nunca vai usar
-— mas está lá.
+- mas está lá.
 
 Para medir na sua máquina, veja [Medindo](#medindo) no fim.
 
@@ -145,7 +145,7 @@ Em ordem de prioridade:
 
 1. `--port`
 2. `PORT` (do ambiente ou do `.env`)
-3. `SERVER_PORT` — é onde o Pterodactyl entrega a porta alocada
+3. `SERVER_PORT` - é onde o Pterodactyl entrega a porta alocada
 4. `25640`
 
 Copie o `.env.example` para `.env` e ajuste. Variável já definida no ambiente
@@ -226,7 +226,7 @@ O que ele cobre, em ordem:
 | Sem permissão de execução | ajusta, sem rebaixar 10 MB |
 | Sem internet | erro claro, em vez de sumir |
 
-A checagem não é "o arquivo existe" e sim **"o arquivo roda"** — um download
+A checagem não é "o arquivo existe" e sim **"o arquivo roda"** - um download
 interrompido deixa um arquivo com tamanho, que passaria num teste de existência
 e quebraria só na hora de subir, com uma mensagem que não ajuda em nada.
 
@@ -238,7 +238,7 @@ Em [`pterodactyl/egg-greenlabs.json`](pterodactyl/egg-greenlabs.json).
 2. Crie o servidor com esse egg
 3. Ligue
 
-O servidor se baixa sozinho. **A instalação só adianta o download** — se ela
+O servidor se baixa sozinho. **A instalação só adianta o download** - se ela
 falhar, o comando de inicialização baixa no boot e o servidor sobe igual. Não
 existe estado em que o egg instale errado e você fique travado.
 
@@ -250,11 +250,11 @@ existe estado em que o egg instale errado e você fique travado.
 
 **Sobre a versão.** Só tag de release serve, e toda tag começa com `v`. Nome de
 branch não vale: o que se baixa é uma release, não o código. Qualquer valor que
-não exista cai na mais recente, com aviso no console — em vez de 404 e servidor
+não exista cai na mais recente, com aviso no console - em vez de 404 e servidor
 parado.
 
 **Sobre a porta.** Em branco usa a que o painel alocou, que é o caso normal.
-Preencha só se quiser outra — e ela precisa estar liberada para este servidor,
+Preencha só se quiser outra - e ela precisa estar liberada para este servidor,
 senão ele sobe e ninguém consegue chegar nele.
 
 #### Por que não tem "build", diferente do Node
@@ -286,7 +286,7 @@ Comando de inicialização:
 ```
 
 O binário está em
-[Releases](https://github.com/gustavo-blacknaut/greenlabs-server/releases) —
+[Releases](https://github.com/gustavo-blacknaut/greenlabs-server/releases) -
 `-arm64` para Oracle Cloud grátis e Raspberry Pi. Confira se a release é nova o
 bastante para conhecer o `--sfu`: rode `./greenlabs-server-linux-amd64 --help` e
 veja se a flag aparece na lista.
@@ -304,7 +304,7 @@ sudo chown -R greenlabs: /opt/greenlabs
 
 ```ini
 [Unit]
-Description=GreenLabs — sinalização
+Description=GreenLabs - sinalização
 After=network.target
 
 [Service]
@@ -358,12 +358,12 @@ New-NetFirewallRule -DisplayName "GreenLabs" -Direction Inbound -Protocol TCP -L
 
 Três saídas, da mais simples para a mais trabalhosa:
 
-- **`--tunnel`** — entrega um endereço `wss://` público, que funciona até com o
+- **`--tunnel`** - entrega um endereço `wss://` público, que funciona até com o
   site em HTTPS. Se não houver cloudflared nem ngrok na máquina, o cloudflared é
   baixado na primeira vez: é um executável só, sem instalador e sem conta.
-- **Radmin VPN ou Hamachi** — todo mundo entra na mesma rede virtual e usa o IP
+- **Radmin VPN ou Hamachi** - todo mundo entra na mesma rede virtual e usa o IP
   que aparece na lista de endereços quando o servidor sobe.
-- **Encaminhamento de porta no roteador** — o jeito clássico, e o que mais dá
+- **Encaminhamento de porta no roteador** - o jeito clássico, e o que mais dá
   trabalho de explicar para os amigos.
 
 ---
@@ -371,7 +371,7 @@ Três saídas, da mais simples para a mais trabalhosa:
 ## A ponte: `wss://` para quem não tem certificado
 
 Uma página em HTTPS **não consegue** abrir `ws://`. O navegador bloqueia como
-conteúdo misto, e não existe header, framework ou configuração que mude isso —
+conteúdo misto, e não existe header, framework ou configuração que mude isso -
 vale para React, HTML puro, Express, qualquer coisa. Quem hospeda em casa quase
 nunca tem certificado, e o resultado é que o site simplesmente não alcança essa
 pessoa, por mais que o servidor dela esteja no ar e funcionando.
@@ -380,7 +380,7 @@ O `--tunnel` resolve para quem hospeda. A ponte resolve para quem **tem um
 servidor com endereço público** e não quer pedir um túnel a cada um:
 
 ```
-navegador  --wss://-->  ponte  --ws://-->  servidor sem certificado
+navegador --wss://-->  ponte --ws://-->  servidor sem certificado
 ```
 
 ```bash
@@ -395,7 +395,7 @@ wss://ponte.seudominio.com.br/ws?alvo=servidordelas.com:25640
 ```
 
 Só a sinalização passa por aí. Vídeo e áudio continuam indo direto entre os
-participantes por WebRTC, então a ponte gasta quase nada de banda — ela carrega
+participantes por WebRTC, então a ponte gasta quase nada de banda - ela carrega
 texto, não mídia.
 
 ### Por que ela é chata de propósito
@@ -407,7 +407,7 @@ isso não é um detalhe:
 - `alvo=169.254.169.254` alcança o serviço de metadados do provedor, que em
   várias nuvens entrega credencial da instância.
 
-O firewall não protege disso — quem abre a conexão é um processo de dentro.
+O firewall não protege disso - quem abre a conexão é um processo de dentro.
 
 Por isso a ponte resolve o nome **antes** de conectar e recusa se **qualquer** um
 dos IPs não for público. Olhar só o primeiro deixaria passar um nome que devolve
@@ -425,7 +425,7 @@ quiser. Além disso há faixa de portas permitida e limite de conexões por IP.
 
 `GET /saude` responde `{"ok":true,"abertas":N}` para monitoramento.
 
-> Quem opera a ponte vê a sinalização passar — quem entrou em qual sala, e o SDP.
+> Quem opera a ponte vê a sinalização passar - quem entrou em qual sala, e o SDP.
 > Não vê imagem nem som, que não passam por ali. Ainda assim, é uma máquina de
 > terceiro no meio: use a sua, ou uma de quem você confia.
 
@@ -472,7 +472,7 @@ Resposta para quem entrou:
 Os que já estavam recebem `{"type":"peer-joined","peerId":"...","name":"...","count":2}`,
 e quando alguém sai, `{"type":"peer-left","peerId":"..."}`.
 
-**Repasse ponto a ponto** — qualquer mensagem com `to` é entregue àquele
+**Repasse ponto a ponto** - qualquer mensagem com `to` é entregue àquele
 participante com o campo `from` acrescentado:
 
 ```json
@@ -480,7 +480,7 @@ participante com o campo `from` acrescentado:
 ```
 
 O `from` é sempre carimbado pelo servidor. Se o cliente mandar um `from`
-próprio, o do servidor prevalece — não dá para forjar remetente.
+próprio, o do servidor prevalece - não dá para forjar remetente.
 
 **Ping**
 
@@ -503,7 +503,7 @@ Uma vez por segundo cada sala recebe
 Três escolhas que valem uma explicação:
 
 **Sem dependência.** O WebSocket (RFC 6455) é implementado aqui, em
-[`websocket.go`](src/websocket.go) — handshake, quadros, fragmentação e controle.
+[`websocket.go`](src/websocket.go) - handshake, quadros, fragmentação e controle.
 São umas 300 linhas e evitam ter que baixar pacote para compilar. `git clone`
 e `go build` bastam, offline inclusive.
 
@@ -516,13 +516,13 @@ o spread do Node fazia.
 
 **Fila de saída com teto.** Cada conexão tem uma fila de 256 mensagens. Quando
 enche, o participante é desconectado em vez de o servidor continuar acumulando
-na memória. A biblioteca `ws` do Node guarda sem limite — um cliente travado
+na memória. A biblioteca `ws` do Node guarda sem limite - um cliente travado
 pode ir empurrando o consumo para cima até derrubar o processo. Aqui ele cai
 sozinho e o resto da sala segue. Aparece no log como `FILA CHEIA`.
 
 Uma coisa continuou igual porque já estava certa: o ping é acumulado e
 transmitido **uma vez por segundo por sala**. Na versão antiga cada ping
-disparava um broadcast para a sala inteira, ou seja n×n mensagens por segundo —
+disparava um broadcast para a sala inteira, ou seja n×n mensagens por segundo -
 30 pessoas geravam ~8 Mbps só de ping.
 
 ---
@@ -531,7 +531,7 @@ disparava um broadcast para a sala inteira, ou seja n×n mensagens por segundo �
 
 Os testes cobrem entrada e saída de sala, repasse com preservação de campos,
 carimbo do `from`, ping/pong e leitura de `.env`. Eles falam com o servidor por
-TCP de verdade, montando os quadros WebSocket na mão — é o caminho completo, não
+TCP de verdade, montando os quadros WebSocket na mão - é o caminho completo, não
 uma chamada interna:
 
 ```bash
@@ -548,7 +548,7 @@ go build -o carga ./ferramentas/carga
 ./carga -addr 127.0.0.1:25640 -clientes 100 -taxa 300 -segundos 10
 ```
 
-Deixe `-taxa 0` para mandar sem limite — mas aí o que você mede é o tamanho da
+Deixe `-taxa 0` para mandar sem limite - mas aí o que você mede é o tamanho da
 fila e a política de descarte, não a vazão. Taxa fixa responde a pergunta que
 importa: *esse volume passa inteiro?*
 

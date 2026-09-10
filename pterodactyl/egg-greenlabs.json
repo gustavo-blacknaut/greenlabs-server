@@ -5,7 +5,7 @@
         "update_url": null
     },
     "exported_at": "2026-08-26T22:20:12.048Z",
-    "name": "GreenLabs — Servidor de Sinalização",
+    "name": "GreenLabs - Servidor de Sinalização",
     "author": "gustavo.c.raichardt@gmail.com",
     "description": "Servidor de sinalização do GreenLabs, para transmissão de tela e chamadas sem conta. Com o SFU ligado o vídeo passa por aqui e a travessia de roteador deixa de ser problema; desligado, o servidor só apresenta as pessoas umas às outras e gasta quase nada.",
     "features": null,
@@ -22,7 +22,7 @@
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/bash\n# Instalação do GreenLabs no Pterodactyl.\n#\n# Só adianta o download para o primeiro boot não esperar. Se falhar aqui, o\n# comando de inicialização baixa sozinho — por isso este script não aborta a\n# instalação por nada: um egg cuja instalação falha deixa o servidor inutilizado\n# no painel, e aqui não há nada que justifique isso.\n#\n# Não usa a API do GitHub nem jq de propósito. A API tem limite de 60 chamadas\n# por hora por IP quando não autenticada, e num host compartilhado esse limite\n# é dividido com estranhos. O endereço /releases/latest/download/NOME\n# redireciona sozinho para a release mais nova, sem chamada de API.\n\ncase \"$(uname -m)\" in\n  aarch64 | arm64) ARQUIVO=\"greenlabs-server-linux-arm64\" ;;\n  *) ARQUIVO=\"greenlabs-server-linux-amd64\" ;;\nesac\n\nVERSAO=\"${VERSAO:-latest}\"\nif [ \"${VERSAO}\" = \"latest\" ] || [ -z \"${VERSAO}\" ]; then\n  BASE=\"https://github.com/gustavo-blacknaut/greenlabs-server/releases/latest/download\"\nelse\n  BASE=\"https://github.com/gustavo-blacknaut/greenlabs-server/releases/download/${VERSAO}\"\nfi\n\necho \"GreenLabs — baixando ${ARQUIVO} (${VERSAO})\"\necho \"  ${BASE}/${ARQUIVO}\"\n\n# curl ou wget: qual existe varia com a imagem de instalação, e depender de um\n# só faz a instalação morrer numa linha que não explica nada.\nif command -v curl >/dev/null 2>&1; then\n  curl -fsSL --retry 3 --retry-delay 2 -o /mnt/server/greenlabs-server \"${BASE}/${ARQUIVO}\"\nelif command -v wget >/dev/null 2>&1; then\n  wget -q --tries=3 -O /mnt/server/greenlabs-server \"${BASE}/${ARQUIVO}\"\nelse\n  echo \"  nem curl nem wget nesta imagem\"\nfi\n\nif [ -s /mnt/server/greenlabs-server ]; then\n  chmod +x /mnt/server/greenlabs-server\n  echo \"  ok, $(stat -c%s /mnt/server/greenlabs-server) bytes\"\n  /mnt/server/greenlabs-server --help 2>/dev/null | head -1\nelse\n  # Arquivo vazio atrapalha mais que arquivo nenhum: o startup veria que existe\n  # e não baixaria de novo.\n  rm -f /mnt/server/greenlabs-server\n  echo \"  nao deu para baixar agora; o servidor baixa sozinho ao ligar\"\nfi\n\necho \"GreenLabs — instalacao concluida\"\nexit 0\n",
+            "script": "#!/bin/bash\n# Instalação do GreenLabs no Pterodactyl.\n#\n# Só adianta o download para o primeiro boot não esperar. Se falhar aqui, o\n# comando de inicialização baixa sozinho - por isso este script não aborta a\n# instalação por nada: um egg cuja instalação falha deixa o servidor inutilizado\n# no painel, e aqui não há nada que justifique isso.\n#\n# Não usa a API do GitHub nem jq de propósito. A API tem limite de 60 chamadas\n# por hora por IP quando não autenticada, e num host compartilhado esse limite\n# é dividido com estranhos. O endereço /releases/latest/download/NOME\n# redireciona sozinho para a release mais nova, sem chamada de API.\n\ncase \"$(uname -m)\" in\n  aarch64 | arm64) ARQUIVO=\"greenlabs-server-linux-arm64\" ;;\n  *) ARQUIVO=\"greenlabs-server-linux-amd64\" ;;\nesac\n\nVERSAO=\"${VERSAO:-latest}\"\nif [ \"${VERSAO}\" = \"latest\" ] || [ -z \"${VERSAO}\" ]; then\n  BASE=\"https://github.com/gustavo-blacknaut/greenlabs-server/releases/latest/download\"\nelse\n  BASE=\"https://github.com/gustavo-blacknaut/greenlabs-server/releases/download/${VERSAO}\"\nfi\n\necho \"GreenLabs - baixando ${ARQUIVO} (${VERSAO})\"\necho \"  ${BASE}/${ARQUIVO}\"\n\n# curl ou wget: qual existe varia com a imagem de instalação, e depender de um\n# só faz a instalação morrer numa linha que não explica nada.\nif command -v curl >/dev/null 2>&1; then\n  curl -fsSL --retry 3 --retry-delay 2 -o /mnt/server/greenlabs-server \"${BASE}/${ARQUIVO}\"\nelif command -v wget >/dev/null 2>&1; then\n  wget -q --tries=3 -O /mnt/server/greenlabs-server \"${BASE}/${ARQUIVO}\"\nelse\n  echo \"  nem curl nem wget nesta imagem\"\nfi\n\nif [ -s /mnt/server/greenlabs-server ]; then\n  chmod +x /mnt/server/greenlabs-server\n  echo \"  ok, $(stat -c%s /mnt/server/greenlabs-server) bytes\"\n  /mnt/server/greenlabs-server --help 2>/dev/null | head -1\nelse\n  # Arquivo vazio atrapalha mais que arquivo nenhum: o startup veria que existe\n  # e não baixaria de novo.\n  rm -f /mnt/server/greenlabs-server\n  echo \"  nao deu para baixar agora; o servidor baixa sozinho ao ligar\"\nfi\n\necho \"GreenLabs - instalacao concluida\"\nexit 0\n",
             "container": "ghcr.io/parkervcp/installers:debian",
             "entrypoint": "bash"
         }
@@ -30,7 +30,7 @@
     "variables": [
         {
             "name": "Retransmitir o vídeo pelo servidor (SFU)",
-            "description": "Ligado (1): cada pessoa mantém uma conexão só, com este servidor, que recebe o vídeo uma vez e reenvia para os outros. Quem transmite para de subir o vídeo várias vezes e ninguém precisa atravessar o roteador do outro. Custa banda e CPU daqui.\n\nDesligado (0): o servidor só apresenta as pessoas e sai da frente. O vídeo vai direto entre elas e este servidor gasta quase nada — mas se a conexão direta falhar, todo mundo aparece na lista e a tela fica preta, sem mensagem de erro.\n\nHospedando num painel, deixe ligado.",
+            "description": "Ligado (1): cada pessoa mantém uma conexão só, com este servidor, que recebe o vídeo uma vez e reenvia para os outros. Quem transmite para de subir o vídeo várias vezes e ninguém precisa atravessar o roteador do outro. Custa banda e CPU daqui.\n\nDesligado (0): o servidor só apresenta as pessoas e sai da frente. O vídeo vai direto entre elas e este servidor gasta quase nada - mas se a conexão direta falhar, todo mundo aparece na lista e a tela fica preta, sem mensagem de erro.\n\nHospedando num painel, deixe ligado.",
             "env_variable": "SFU",
             "default_value": "1",
             "user_viewable": true,
@@ -40,7 +40,7 @@
         },
         {
             "name": "Porta",
-            "description": "Deixe em branco para usar a porta que o painel alocou — é o caso normal.\n\nPreencha só se quiser outra. Ela precisa estar liberada para este servidor, senão ele sobe e ninguém consegue chegar nele.",
+            "description": "Deixe em branco para usar a porta que o painel alocou - é o caso normal.\n\nPreencha só se quiser outra. Ela precisa estar liberada para este servidor, senão ele sobe e ninguém consegue chegar nele.",
             "env_variable": "PORTA",
             "default_value": "",
             "user_viewable": true,
@@ -50,7 +50,7 @@
         },
         {
             "name": "Versão",
-            "description": "Deixe em \"latest\" para a release mais recente. Para fixar uma versão, use a tag exata, com o \"v\" na frente: v0.2.0.\n\nQualquer outro valor cai na mais recente — nome de branch não vale aqui, porque o que se baixa é uma release, não o código.",
+            "description": "Deixe em \"latest\" para a release mais recente. Para fixar uma versão, use a tag exata, com o \"v\" na frente: v0.2.0.\n\nQualquer outro valor cai na mais recente - nome de branch não vale aqui, porque o que se baixa é uma release, não o código.",
             "env_variable": "VERSAO",
             "default_value": "latest",
             "user_viewable": true,
