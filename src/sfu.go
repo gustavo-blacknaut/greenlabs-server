@@ -39,6 +39,7 @@ const IDdoSFU = "sfu"
 
 // faixaEncaminhada é uma faixa que alguém publicou e que o servidor reenvia.
 type faixaEncaminhada struct {
+	sala   string
 	dono   string // peerId de quem publicou
 	origem *webrtc.TrackRemote
 	saida  *webrtc.TrackLocalStaticRTP
@@ -58,6 +59,7 @@ type sessaoSFU struct {
 	// aparece faixa nova nesse meio-tempo, fica anotado aqui e a renegociação
 	// sai assim que a resposta chegar.
 	renegociarDepois bool
+	oferecendo       bool
 }
 
 // SFU guarda as sessões por sala e faz o encaminhamento entre elas.
@@ -171,6 +173,12 @@ func NovoSFU(portaMidia int, enderecoPublico string) *SFU {
 			if err := conexao.SetReadBuffer(bufferDeRecepcao); err != nil {
 				avisoSFU("nao consegui aumentar o buffer de recepcao: %v", err)
 				avisoSFU("rajadas de quadro-chave em 1080p podem perder pacote")
+			}
+			// O mesmo vale na saida: um IDR encaminhado para varios espectadores
+			// nao deve bloquear a goroutine de midia nem ser cortado pelo buffer
+			// pequeno do sistema operacional.
+			if err := conexao.SetWriteBuffer(bufferDeRecepcao); err != nil {
+				avisoSFU("nao consegui aumentar o buffer de envio: %v", err)
 			}
 			ajustes.SetICEUDPMux(webrtc.NewICEUDPMux(nil, conexao))
 			infoSFU("midia em udp/%d", portaMidia)
@@ -407,12 +415,24 @@ func (s *SFU) pedirChaveDeTudo(sala, peer string) {
 func (s *SFU) oferecer(sessao *sessaoSFU) error {
 	// Já há oferta esperando resposta: anota e sai. Insistir agora seria
 	// recusado, e o participante ficaria sem receber a faixa nova.
-	if sessao.conexao.SignalingState() != webrtc.SignalingStateStable {
-		sessao.mu.Lock()
+	sessao.mu.Lock()
+	if sessao.fechada {
+		sessao.mu.Unlock()
+		return nil
+	}
+	if sessao.oferecendo || sessao.conexao.SignalingState() != webrtc.SignalingStateStable {
 		sessao.renegociarDepois = true
 		sessao.mu.Unlock()
 		return nil
 	}
+	sessao.oferecendo = true
+	sessao.mu.Unlock()
+
+	defer func() {
+		sessao.mu.Lock()
+		sessao.oferecendo = false
+		sessao.mu.Unlock()
+	}()
 
 	oferta, err := sessao.conexao.CreateOffer(nil)
 	if err != nil {
@@ -437,14 +457,26 @@ func (s *SFU) aoReceberFaixa(sala, dono string, origem *webrtc.TrackRemote) {
 	// estava lá e pulava a segunda faixa - sempre. Quem publicava áudio antes
 	// perdia o vídeo, e vice-versa. Na oferta isso aparecia como a m-line de
 	// vídeo ficando em recvonly enquanto só a de áudio virava sendrecv.
+	// Preserve os ids anunciados pelo publicador. Alem de impedir colisao entre
+	// duas faixas de video da mesma pessoa, isto permite que `stream-meta` e
+	// `stream-ended` continuem identificando a mesma transmissao depois que ela
+	// atravessa o SFU.
+	faixaID := "greenlabs-" + curto(dono) + "-" + origem.ID()
+	if origem.ID() == "" {
+		faixaID = "greenlabs-" + curto(dono) + "-" + origem.Kind().String()
+	}
+	streamID := origem.StreamID()
+	if streamID == "" {
+		streamID = "greenlabs-" + curto(dono)
+	}
 	saida, err := webrtc.NewTrackLocalStaticRTP(origem.Codec().RTPCodecCapability,
-		"greenlabs-"+curto(dono)+"-"+origem.Kind().String(), "greenlabs-"+curto(dono))
+		faixaID, streamID)
 	if err != nil {
 		erroSFU("nao foi possivel criar a faixa de saida: %v", err)
 		return
 	}
 
-	f := &faixaEncaminhada{dono: dono, origem: origem, saida: saida}
+	f := &faixaEncaminhada{sala: sala, dono: dono, origem: origem, saida: saida}
 
 	s.mu.Lock()
 	s.faixas[sala] = append(s.faixas[sala], f)
@@ -531,10 +563,61 @@ func (s *SFU) assinar(destino *sessaoSFU, f *faixaEncaminhada) {
 	// desenho certo de qualquer jeito: misturar o que a pessoa publica com o que
 	// ela recebe na mesma m-line e o tipo de coisa que funciona ate parar de
 	// funcionar.
-	if _, err := destino.conexao.AddTransceiverFromTrack(f.saida,
-		webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly}); err != nil {
+	transceptor, err := destino.conexao.AddTransceiverFromTrack(f.saida,
+		webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly})
+	if err != nil {
 		erroSFU("nao foi possivel entregar a faixa a %s: %v", curto(destino.peer), err)
+		return
 	}
+
+	// Ler RTCP nao e opcional. E por este caminho que os interceptadores do
+	// Pion processam NACK (retransmissao), e tambem e daqui que chegam PLI/FIR
+	// quando o decodificador de um espectador perde a referencia. Sem drenar a
+	// fila, uma perda curta congelava o video ate o proximo IDR natural.
+	go s.lerRTCPDaSaida(f, transceptor.Sender())
+}
+
+func (s *SFU) lerRTCPDaSaida(f *faixaEncaminhada, sender *webrtc.RTPSender) {
+	for {
+		pacotes, _, err := sender.ReadRTCP()
+		if err != nil {
+			return
+		}
+		for _, pacote := range pacotes {
+			switch feedback := pacote.(type) {
+			case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest:
+				// O SSRC visto pelo espectador e o da copia local. O publicador
+				// conhece o SSRC original, portanto geramos um PLI novo para ele.
+				s.pedirChaveParaFaixa(f)
+			case *rtcp.ReceiverEstimatedMaximumBitrate:
+				// O navegador publicador consegue reduzir bitrate com REMB. Troque
+				// apenas o SSRC, que mudou ao atravessar o TrackLocalStaticRTP.
+				s.encaminharREMB(f, feedback.Bitrate)
+			}
+		}
+	}
+}
+
+func (s *SFU) pedirChaveParaFaixa(f *faixaEncaminhada) {
+	s.pedirChave(f.sala, f)
+}
+
+func (s *SFU) encaminharREMB(f *faixaEncaminhada, bitrate float32) {
+	if f.origem.Kind() != webrtc.RTPCodecTypeVideo || bitrate <= 0 {
+		return
+	}
+	s.mu.RLock()
+	publicador := s.salas[f.sala][f.dono]
+	s.mu.RUnlock()
+	if publicador == nil {
+		return
+	}
+	_ = publicador.conexao.WriteRTCP([]rtcp.Packet{
+		&rtcp.ReceiverEstimatedMaximumBitrate{
+			Bitrate: bitrate,
+			SSRCs:   []uint32{uint32(f.origem.SSRC())},
+		},
+	})
 }
 
 // assinarComChave entrega a faixa e pede um quadro-chave a quem publica: sem

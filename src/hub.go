@@ -219,9 +219,37 @@ func (h *Hub) entrar(p *Peer, m *mensagemEntrada) {
 	// lista é para mostrar, não para negociar. Cliente antigo, que não conhece
 	// o campo, vai oferecer para os pares como sempre fez e cair na malha -
 	// funciona igual, só sem a economia do retransmissor.
+	// Entrar no SFU cria a oferta imediatamente. Ela NAO pode chegar antes do
+	// `joined`: e nessa mensagem que o cliente descobre que esta em modo SFU.
+	// Quando a oferta chegava primeiro, o cliente a tratava como uma conexao
+	// P2P comum, criava m-lines proprias e depois respondia um SDP diferente do
+	// esperado pelo servidor. Dependia da velocidade de cada maquina e por isso
+	// aparecia como "para alguns trava, para outros nao".
+	//
+	// Montamos a sessao agora para saber se deu certo, mas seguramos oferta e
+	// candidatos ate o `joined` entrar na fila WebSocket.
+	sfuAtivo := false
+	var sfuMu sync.Mutex
+	sfuLiberado := false
+	mensagensSFU := make([][]byte, 0, 4)
 	if h.sfu != nil {
-		if err := h.sfu.Entrar(sala, p.id, func(bruto []byte) { p.enviar(comCampoFrom(bruto, IDdoSFU)) }); err != nil {
+		enviarDoSFU := func(bruto []byte) {
+			pacote := comCampoFrom(bruto, IDdoSFU)
+			sfuMu.Lock()
+			if !sfuLiberado {
+				// A origem reutiliza buffers em alguns caminhos; a fila precisa da
+				// sua propria copia enquanto a mensagem estiver retida.
+				mensagensSFU = append(mensagensSFU, append([]byte(nil), pacote...))
+				sfuMu.Unlock()
+				return
+			}
+			sfuMu.Unlock()
+			p.enviar(pacote)
+		}
+		if err := h.sfu.Entrar(sala, p.id, enviarDoSFU); err != nil {
 			registrar("[sfu] nao foi possivel abrir a midia para %s: %v", p.id, err)
+		} else {
+			sfuAtivo = true
 		}
 	}
 
@@ -243,11 +271,22 @@ func (h *Hub) entrar(p *Peer, m *mensagemEntrada) {
 	}
 	b.WriteString(`],"count":`)
 	b.WriteString(strconv.Itoa(total))
-	if h.sfu != nil {
+	if sfuAtivo {
 		b.WriteString(`,"sfu":true`)
 	}
 	b.WriteByte('}')
 	p.enviar(b.Bytes())
+
+	if sfuAtivo {
+		sfuMu.Lock()
+		sfuLiberado = true
+		pendentes := mensagensSFU
+		mensagensSFU = nil
+		sfuMu.Unlock()
+		for _, pacoteSFU := range pendentes {
+			p.enviar(pacoteSFU)
+		}
+	}
 
 	var aviso bytes.Buffer
 	aviso.WriteString(`{"type":"peer-joined","peerId":`)
