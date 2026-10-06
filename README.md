@@ -560,7 +560,10 @@ avisos, nao comprovam entrega integral dos repasses.
 
 Em 06/10/2026, o teste opt-in sustentou 10.000 sockets WebSocket em 100 salas
 de 100 participantes na maquina local, sem falhas detectadas. Entrada mais
-tres segundos de sustentacao levaram aproximadamente 31 segundos. O servidor
+tres segundos de sustentacao levaram aproximadamente 31 segundos numa execucao
+e 86 segundos na repeticao durante a revisao, sem logs detalhados. Uma execucao
+com logs detalhados falhou; por padrao entradas e saidas agora so sao registradas
+com `GREENLABS_DEBUG=1`. O servidor
 e o gerador rodaram na mesma maquina; isto nao mede capacidade de producao.
 
 ```powershell
