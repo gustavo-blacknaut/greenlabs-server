@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -47,7 +48,8 @@ const (
 
 	// Fila de saída por conexão. Cheia significa par que não acompanha: melhor
 	// derrubar do que acumular memória sem teto.
-	tamanhoFilaSaida = 256
+	tamanhoFilaSaida      = 256
+	bytesMaximosFilaSaida = 2 << 20
 )
 
 var (
@@ -69,9 +71,10 @@ type Conn struct {
 	leitor  *bufio.Reader
 	escrita *bufio.Writer
 
-	saida   chan quadroSaida
-	fechado chan struct{}
-	umaVez  sync.Once
+	saida       chan quadroSaida
+	fechado     chan struct{}
+	umaVez      sync.Once
+	bytesNaFila atomic.Int64
 
 	// AoPong é chamado quando o cliente responde a um ping nosso.
 	AoPong func()
@@ -167,18 +170,35 @@ func (c *Conn) EnviarPing() error {
 	return c.enfileirar(quadroSaida{opcode: opPing})
 }
 
+// O motivo vai no quadro de fechamento, entendido tambem por clientes que
+// nao conhecem uma mensagem JSON de erro. 1013 indica sobrecarga temporaria.
+func (c *Conn) Rejeitar(motivo string) {
+	dados := []byte{0x03, 0xF5} // 1013
+	dados = append(dados, []byte(motivo)...)
+	_ = c.enfileirar(quadroSaida{opcode: opFechar, dados: dados})
+	c.Fechar()
+}
+
 func (c *Conn) enfileirar(q quadroSaida) error {
 	select {
 	case <-c.fechado:
 		return ErrConexaoFechada
 	default:
 	}
+	bytes := int64(len(q.dados))
+	if c.bytesNaFila.Add(bytes) > bytesMaximosFilaSaida {
+		c.bytesNaFila.Add(-bytes)
+		c.Fechar()
+		return ErrFilaCheia
+	}
 	select {
 	case c.saida <- q:
 		return nil
 	case <-c.fechado:
+		c.bytesNaFila.Add(-bytes)
 		return ErrConexaoFechada
 	default:
+		c.bytesNaFila.Add(-bytes)
 		c.Fechar()
 		return ErrFilaCheia
 	}
@@ -190,6 +210,7 @@ func (c *Conn) Escritor() {
 	for {
 		select {
 		case q := <-c.saida:
+			c.bytesNaFila.Add(-int64(len(q.dados)))
 			if err := c.escreverQuadro(q.opcode, q.dados); err != nil {
 				c.Fechar()
 				return
@@ -207,6 +228,7 @@ func (c *Conn) drenar() {
 	for {
 		select {
 		case q := <-c.saida:
+			c.bytesNaFila.Add(-int64(len(q.dados)))
 			if err := c.escreverQuadro(q.opcode, q.dados); err != nil {
 				return
 			}

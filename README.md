@@ -552,8 +552,43 @@ Deixe `-taxa 0` para mandar sem limite - mas aí o que você mede é o tamanho d
 fila e a política de descarte, não a vazão. Taxa fixa responde a pergunta que
 importa: *esse volume passa inteiro?*
 
-`recebidas` passa de 100% porque o `room-pings` de cada segundo também conta
-como mensagem recebida.
+`recebidas` conta apenas as mensagens `candidate` da carga, sem incluir avisos
+de entrada ou pings. Comparacoes feitas com o contador antigo, que incluia
+avisos, nao comprovam entrega integral dos repasses.
+
+### Teste local de 10 mil conexoes
+
+Em 06/10/2026, o teste opt-in sustentou 10.000 sockets WebSocket em 100 salas
+de 100 participantes na maquina local, sem falhas detectadas. Entrada mais
+tres segundos de sustentacao levaram aproximadamente 31 segundos. O servidor
+e o gerador rodaram na mesma maquina; isto nao mede capacidade de producao.
+
+```powershell
+$env:GREENLABS_TEST_CLIENTES = '10000'
+go test ./src -run '^TestCargaSinalizacao$' -v -timeout 120s
+```
+
+O teste nao cria transportes WebRTC, nao envia midia e nao valida dez mil
+usuarios numa unica sala. Para homologar essa meta faltam carga SFU sustentada,
+perda e latencia de rede, consumo de CPU/RAM/banda, limites do sistema e teste
+dos clientes. Dez mil espectadores recebendo uma stream de 4 Mbps exigem cerca
+de 40 Gbps de saida apenas de video, antes dos overheads.
+
+Protecoes adicionadas: fila WebSocket de ate 2 MiB de payload pendente por
+conexao (alem do limite de 256 mensagens), agrupamento de broadcasts de ping
+nas entradas/saidas e pedidos de quadro-chave limitados por faixa. Isso nao
+substitui limites globais de recursos ou distribuicao de salas entre servidores.
+
+Para salas distintas, a admissao agora tem limites configuraveis pelo ambiente:
+`GREENLABS_MAX_CONEXOES=12000` (inclui conexoes ainda sem sala) e
+`GREENLABS_MAX_POR_SALA=200`. O primeiro recusa novos handshakes com HTTP 503;
+o segundo fecha apenas a conexao excedente com codigo WebSocket 1013 e motivo
+`Sala cheia`. Ajuste esses limites conforme medicao de midia e recursos reais,
+nao apenas conforme a quantidade desejada de usuarios.
+
+`/stats` inclui `activeConnections`, `maxConnections` e `maxPeersPerRoom`.
+O encerramento do servidor tambem fecha os sockets WebSocket, que nao sao
+recolhidos automaticamente pelo shutdown HTTP.
 
 Para o consumo, olhe o processo enquanto a carga roda:
 

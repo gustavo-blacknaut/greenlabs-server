@@ -6,15 +6,73 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 )
 
 // registrar imprime no mesmo formato do servidor em Node: carimbo ISO na
 // frente, para os logs dos dois serem lidos pelas mesmas ferramentas.
+type registroLog struct {
+	texto     string
+	concluido chan struct{}
+}
+
+var filaLogs = make(chan registroLog, 128)
+var iniciarLogs sync.Once
+
+func prepararLogs() {
+	iniciarLogs.Do(func() {
+		go func() {
+			var ultimo string
+			var ultimoInstante time.Time
+			for registro := range filaLogs {
+				if registro.concluido != nil {
+					close(registro.concluido)
+					continue
+				}
+				agora := time.Now()
+				if registro.texto == ultimo && agora.Sub(ultimoInstante) < 5*time.Second {
+					continue
+				}
+				ultimo, ultimoInstante = registro.texto, agora
+				fmt.Fprintf(os.Stdout, "[%s] %s\n", agora.UTC().Format("2006-01-02T15:04:05.000Z"), registro.texto)
+			}
+		}()
+	})
+}
+
 func registrar(formato string, args ...any) {
-	fmt.Fprintf(os.Stdout, "[%s] %s\n",
-		time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
-		fmt.Sprintf(formato, args...))
+	prepararLogs()
+	texto := fmt.Sprintf(formato, args...)
+	if len(texto) > 2048 {
+		texto = texto[:2048]
+	}
+	select {
+	case filaLogs <- registroLog{texto: texto}:
+	default: // Um console lento nunca bloqueia sinalização ou mídia.
+	}
+}
+
+func registrarDetalhado(formato string, args ...any) {
+	if os.Getenv("GREENLABS_DEBUG") == "1" {
+		registrar(formato, args...)
+	}
+}
+
+func concluirLogs() {
+	prepararLogs()
+	concluido := make(chan struct{})
+	prazo := time.NewTimer(500 * time.Millisecond)
+	defer prazo.Stop()
+	select {
+	case filaLogs <- registroLog{concluido: concluido}:
+	case <-prazo.C:
+		return
+	}
+	select {
+	case <-concluido:
+	case <-prazo.C:
+	}
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }

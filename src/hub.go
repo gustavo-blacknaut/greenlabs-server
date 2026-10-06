@@ -47,8 +47,9 @@ func (p *Peer) enviar(dados []byte) {
 }
 
 type Hub struct {
-	mu    sync.RWMutex
-	salas map[string]map[string]*Peer
+	mu            sync.RWMutex
+	salas         map[string]map[string]*Peer
+	limitePorSala int
 
 	// Cada cliente manda ping uma vez por segundo. No Node, cada ping disparava
 	// um broadcast para a sala inteira: n pings/s x n destinatários, ou seja
@@ -72,11 +73,12 @@ type Hub struct {
 
 func NovoHub(sfu *SFU) *Hub {
 	h := &Hub{
-		sfu:        sfu,
-		salas:      make(map[string]map[string]*Peer),
-		pingSujas:  make(map[string]struct{}),
-		iniciadoEm: time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
-		encerrar:   make(chan struct{}),
+		sfu:           sfu,
+		salas:         make(map[string]map[string]*Peer),
+		pingSujas:     make(map[string]struct{}),
+		iniciadoEm:    time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
+		encerrar:      make(chan struct{}),
+		limitePorSala: limiteDoAmbiente("GREENLABS_MAX_POR_SALA", 200, 10000),
 	}
 	go h.esvaziarPings()
 	return h
@@ -196,6 +198,14 @@ func (h *Hub) entrar(p *Peer, m *mensagemEntrada) {
 
 	h.mu.Lock()
 	membros, ok := h.salas[sala]
+	if len(membros) >= h.limitePorSala {
+		h.mu.Unlock()
+		p.mu.Lock()
+		p.sala = ""
+		p.mu.Unlock()
+		p.conexao.Rejeitar("Sala cheia")
+		return
+	}
 	if !ok {
 		membros = make(map[string]*Peer)
 		h.salas[sala] = membros
@@ -209,7 +219,7 @@ func (h *Hub) entrar(p *Peer, m *mensagemEntrada) {
 	total := len(membros)
 	h.mu.Unlock()
 
-	registrar("ENTROU: sala=%s id=%s nome=%s total=%d", sala, p.id, nome, total)
+	registrarDetalhado("ENTROU: sala=%s id=%s nome=%s total=%d", sala, p.id, nome, total)
 
 	// A lista de pares continua indo em modo SFU: ela é o que faz as pessoas
 	// aparecerem umas para as outras na tela. Antes ia vazia, para ninguém
@@ -301,7 +311,7 @@ func (h *Hub) entrar(p *Peer, m *mensagemEntrada) {
 		outro.enviar(pacote)
 	}
 
-	h.transmitirPings(sala)
+	h.marcarPings(sala)
 }
 
 // --------------------------------------------------------------------- sair
@@ -337,7 +347,7 @@ func (h *Hub) Sair(p *Peer) {
 		h.sfu.Sair(sala, p.id)
 	}
 
-	registrar("SAIDA: sala=%s id=%s nome=%s restantes=%d", sala, p.id, nome, restantes)
+	registrarDetalhado("SAIDA: sala=%s id=%s nome=%s restantes=%d", sala, p.id, nome, restantes)
 
 	var b bytes.Buffer
 	b.WriteString(`{"type":"peer-left","peerId":`)
@@ -349,10 +359,10 @@ func (h *Hub) Sair(p *Peer) {
 	}
 
 	if restantes == 0 {
-		registrar("SALA VAZIA: removida=%s", sala)
+		registrarDetalhado("SALA VAZIA: removida=%s", sala)
 		return
 	}
-	h.transmitirPings(sala)
+	h.marcarPings(sala)
 }
 
 // --------------------------------------------------------------------- ping
@@ -384,10 +394,14 @@ func (h *Hub) responderPing(p *Peer, m *mensagemEntrada) {
 	p.enviar(b.Bytes())
 
 	if sala := p.Sala(); sala != "" {
-		h.pingMu.Lock()
-		h.pingSujas[sala] = struct{}{}
-		h.pingMu.Unlock()
+		h.marcarPings(sala)
 	}
+}
+
+func (h *Hub) marcarPings(sala string) {
+	h.pingMu.Lock()
+	h.pingSujas[sala] = struct{}{}
+	h.pingMu.Unlock()
 }
 
 func (h *Hub) esvaziarPings() {

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -21,17 +22,24 @@ import (
 const intervaloPing = 3 * time.Second
 
 type Servidor struct {
-	hub  *Hub
-	http *http.Server
-	rede net.Listener
-	Port int
+	hub        *Hub
+	http       *http.Server
+	rede       net.Listener
+	Port       int
+	vagas      chan struct{}
+	conexoesMu sync.Mutex
+	conexoes   map[*Conn]struct{}
+	encerrando bool
 }
 
 // sfu pode ser nil: sem ele o servidor so apresenta as pessoas umas as outras
 // e o video vai direto entre elas, que e o modo padrao.
 func Iniciar(porta int, sfu *SFU) (*Servidor, error) {
 	hub := NovoHub(sfu)
-	s := &Servidor{hub: hub}
+	s := &Servidor{hub: hub,
+		vagas:    make(chan struct{}, limiteDoAmbiente("GREENLABS_MAX_CONEXOES", 12000, 100000)),
+		conexoes: make(map[*Conn]struct{}),
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.rotear)
@@ -41,10 +49,13 @@ func Iniciar(porta int, sfu *SFU) (*Servidor, error) {
 		// Sem prazo de leitura no servidor HTTP: uma conexão que vira WebSocket
 		// fica aberta por horas, e o prazo por quadro é tratado no Conn.
 		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    32 << 10,
 	}
 
 	ouvinte, err := net.Listen("tcp", ":"+itoa(porta))
 	if err != nil {
+		hub.Parar()
 		return nil, err
 	}
 	s.rede = ouvinte
@@ -62,6 +73,18 @@ func Iniciar(porta int, sfu *SFU) (*Servidor, error) {
 }
 
 func (s *Servidor) Fechar() {
+	// Shutdown HTTP nao fecha sockets sequestrados pelo WebSocket.
+	s.conexoesMu.Lock()
+	s.encerrando = true
+	conexoes := make([]*Conn, 0, len(s.conexoes))
+	for c := range s.conexoes {
+		conexoes = append(conexoes, c)
+	}
+	s.conexoesMu.Unlock()
+	for _, c := range conexoes {
+		c.Fechar()
+		_ = c.rede.Close()
+	}
 	s.hub.Parar()
 	ctx, cancelar := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancelar()
@@ -93,17 +116,39 @@ func ehPedidoWebSocket(r *http.Request) bool {
 // --------------------------------------------------------------- WebSocket
 
 func (s *Servidor) atenderWebSocket(w http.ResponseWriter, r *http.Request) {
+	select {
+	case s.vagas <- struct{}{}:
+		defer func() { <-s.vagas }()
+	default:
+		w.Header().Set("Retry-After", "5")
+		http.Error(w, "Servidor cheio", http.StatusServiceUnavailable)
+		return
+	}
 	conexao, err := AceitarWebSocket(w, r)
 	if err != nil {
 		http.Error(w, "handshake WebSocket invalido", http.StatusBadRequest)
 		return
 	}
+	s.conexoesMu.Lock()
+	if s.encerrando {
+		s.conexoesMu.Unlock()
+		conexao.Fechar()
+		_ = conexao.rede.Close()
+		return
+	}
+	s.conexoes[conexao] = struct{}{}
+	s.conexoesMu.Unlock()
+	defer func() {
+		s.conexoesMu.Lock()
+		delete(s.conexoes, conexao)
+		s.conexoesMu.Unlock()
+	}()
 
 	p := s.hub.NovoPeer(conexao)
 	go conexao.Escritor()
 	go baterCoracao(conexao)
 
-	registrar("CONEXAO: id=%s ip=%s", p.id, enderecoRemoto(r))
+	registrarDetalhado("CONEXAO: id=%s ip=%s", p.id, enderecoRemoto(r))
 
 	defer func() {
 		s.hub.Sair(p)
@@ -117,7 +162,7 @@ func (s *Servidor) atenderWebSocket(w http.ResponseWriter, r *http.Request) {
 			if errors.As(err, &timeout) && timeout.Timeout() {
 				registrar("DEAD PEER / CRASH DETECTADO: id=%s", p.id)
 			} else {
-				registrar("DESCONECTADO: id=%s sala=%s", p.id, ouTraco(p.Sala()))
+				registrarDetalhado("DESCONECTADO: id=%s sala=%s", p.id, ouTraco(p.Sala()))
 			}
 			return
 		}
@@ -181,6 +226,9 @@ type estatisticasJSON struct {
 	IniciadoEm      string `json:"startedAt"`
 	TotalConexoes   uint64 `json:"totalConnections"`
 	TotalRepassadas uint64 `json:"totalMessagesRelayed"`
+	ConexoesAtivas  int    `json:"activeConnections"`
+	LimiteConexoes  int    `json:"maxConnections"`
+	LimitePorSala   int    `json:"maxPeersPerRoom"`
 }
 
 type respostaEstatisticas struct {
@@ -221,6 +269,9 @@ func (s *Servidor) responderEstatisticas(w http.ResponseWriter) {
 			IniciadoEm:      s.hub.iniciadoEm,
 			TotalConexoes:   s.hub.totalConexoes.Load(),
 			TotalRepassadas: s.hub.totalRepassadas.Load(),
+			ConexoesAtivas:  len(s.vagas),
+			LimiteConexoes:  cap(s.vagas),
+			LimitePorSala:   s.hub.limitePorSala,
 		},
 		SalasAtivas: s.hub.TotalSalas(),
 	}, true)

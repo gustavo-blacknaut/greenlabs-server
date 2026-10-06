@@ -66,3 +66,11 @@ func ResolverPorta(preferida int) int {
 }
 
 func portaValida(n int) bool { return n > 0 && n < 65536 }
+
+func limiteDoAmbiente(chave string, padrao, maximo int) int {
+	n, err := strconv.Atoi(strings.TrimSpace(os.Getenv(chave)))
+	if err != nil || n < 1 || n > maximo {
+		return padrao
+	}
+	return n
+}

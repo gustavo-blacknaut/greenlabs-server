@@ -2,7 +2,7 @@
 *.log
 *.exe
 greenlabs-server
-carga
+/carga
 dist/
 
 # Nada de binario nem pacote versionado aqui.

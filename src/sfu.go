@@ -39,10 +39,25 @@ const IDdoSFU = "sfu"
 
 // faixaEncaminhada é uma faixa que alguém publicou e que o servidor reenvia.
 type faixaEncaminhada struct {
-	sala   string
-	dono   string // peerId de quem publicou
-	origem *webrtc.TrackRemote
-	saida  *webrtc.TrackLocalStaticRTP
+	sala           string
+	dono           string // peerId de quem publicou
+	origem         *webrtc.TrackRemote
+	saida          *webrtc.TrackLocalStaticRTP
+	chaveMu        sync.Mutex
+	ultimaChave    time.Time
+	repetindoChave bool
+}
+
+// Muitos espectadores podem perder o mesmo quadro. Um PLI por intervalo
+// recupera todos sem obrigar o publicador a produzir milhares de quadros-chave.
+func (f *faixaEncaminhada) permitirChave(agora time.Time) bool {
+	f.chaveMu.Lock()
+	defer f.chaveMu.Unlock()
+	if !f.ultimaChave.IsZero() && agora.Sub(f.ultimaChave) < 500*time.Millisecond {
+		return false
+	}
+	f.ultimaChave = agora
+	return true
 }
 
 type sessaoSFU struct {
@@ -50,9 +65,10 @@ type sessaoSFU struct {
 	conexao *webrtc.PeerConnection
 	enviar  func([]byte)
 
-	mu      sync.Mutex
-	saidas  map[string]*webrtc.TrackLocalStaticRTP // faixaID -> o que mandamos para ele
-	fechada bool
+	mu                  sync.Mutex
+	saidas              map[string]*webrtc.TrackLocalStaticRTP // faixaID -> o que mandamos para ele
+	fechada             bool
+	candidatosPendentes []webrtc.ICECandidateInit
 
 	// Uma oferta nossa esperando resposta. Enquanto houver, não dá para fazer
 	// outra: o WebRTC recusa com "have-local-offer -> SetLocal(offer)". Quando
@@ -64,11 +80,13 @@ type sessaoSFU struct {
 
 // SFU guarda as sessões por sala e faz o encaminhamento entre elas.
 type SFU struct {
-	mu     sync.RWMutex
-	salas  map[string]map[string]*sessaoSFU // sala -> peerId -> sessão
-	faixas map[string][]*faixaEncaminhada   // sala -> faixas publicadas
-	api    *webrtc.API
-	config webrtc.Configuration
+	mu           sync.RWMutex
+	salas        map[string]map[string]*sessaoSFU // sala -> peerId -> sessão
+	faixas       map[string][]*faixaEncaminhada   // sala -> faixas publicadas
+	api          *webrtc.API
+	config       webrtc.Configuration
+	fecharMidia  func() error
+	fecharUmaVez sync.Once
 }
 
 // NovoSFU monta o retransmissor.
@@ -84,6 +102,7 @@ type SFU struct {
 // inalcançável para quem está na internet. Em branco, o servidor descobre
 // sozinho pelo STUN.
 func NovoSFU(portaMidia int, enderecoPublico string) *SFU {
+	var fecharMidia func() error
 	// MediaEngine só com o que os clientes do GreenLabs falam. Registrar todos
 	// os codecs padrão faria o servidor aceitar VP8 de um lado e H.264 de outro
 	// dentro da mesma sala, e aí o reenvio não funcionaria: o SFU repassa
@@ -180,8 +199,10 @@ func NovoSFU(portaMidia int, enderecoPublico string) *SFU {
 			if err := conexao.SetWriteBuffer(bufferDeRecepcao); err != nil {
 				avisoSFU("nao consegui aumentar o buffer de envio: %v", err)
 			}
-			ajustes.SetICEUDPMux(webrtc.NewICEUDPMux(nil, conexao))
-			infoSFU("midia em udp/%d", portaMidia)
+			mux := webrtc.NewICEUDPMux(nil, conexao)
+			ajustes.SetICEUDPMux(mux)
+			fecharMidia = mux.Close
+			registrar("[sfu] midia em udp/%d", portaMidia)
 		}
 	}
 
@@ -201,14 +222,15 @@ func NovoSFU(portaMidia int, enderecoPublico string) *SFU {
 		// sair e voltar pelo roteador - custa um pouco de latência, e é o
 		// preço de funcionar para todo mundo.
 		ajustes.SetNAT1To1IPs([]string{enderecoPublico}, webrtc.ICECandidateTypeHost)
-		infoSFU("anunciando o endereco %s", enderecoPublico)
+		registrar("[sfu] anunciando o endereco %s", enderecoPublico)
 	} else {
 		erroSFU("nao descobri o endereco publico; quem estiver fora da rede pode nao conectar")
 	}
 
 	return &SFU{
-		salas:  make(map[string]map[string]*sessaoSFU),
-		faixas: make(map[string][]*faixaEncaminhada),
+		fecharMidia: fecharMidia,
+		salas:       make(map[string]map[string]*sessaoSFU),
+		faixas:      make(map[string][]*faixaEncaminhada),
 		api: webrtc.NewAPI(webrtc.WithMediaEngine(motor),
 			webrtc.WithSettingEngine(ajustes)),
 		config: webrtc.Configuration{
@@ -217,6 +239,15 @@ func NovoSFU(portaMidia int, enderecoPublico string) *SFU {
 			},
 		},
 	}
+}
+
+// FecharMidia libera a porta compartilhada depois que as sessoes forem encerradas.
+func (s *SFU) FecharMidia() {
+	s.fecharUmaVez.Do(func() {
+		if s.fecharMidia != nil {
+			_ = s.fecharMidia()
+		}
+	})
 }
 
 // descobrirIPPublico pergunta a um servidor STUN qual endereço o mundo vê.
@@ -428,19 +459,23 @@ func (s *SFU) oferecer(sessao *sessaoSFU) error {
 	sessao.oferecendo = true
 	sessao.mu.Unlock()
 
-	defer func() {
-		sessao.mu.Lock()
-		sessao.oferecendo = false
-		sessao.mu.Unlock()
+	err := func() error {
+		defer func() {
+			sessao.mu.Lock()
+			sessao.oferecendo = false
+			sessao.mu.Unlock()
+		}()
+		oferta, err := sessao.conexao.CreateOffer(nil)
+		if err != nil {
+			return err
+		}
+		return sessao.conexao.SetLocalDescription(oferta)
 	}()
-
-	oferta, err := sessao.conexao.CreateOffer(nil)
 	if err != nil {
 		return err
 	}
-	if err := sessao.conexao.SetLocalDescription(oferta); err != nil {
-		return err
-	}
+	// Libera o marcador antes do callback: uma resposta rapida ja pode
+	// disparar a proxima oferta. A SignalingState protege a oferta pendente.
 	sessao.enviar(mensagemDeDescricao("offer", sessao.conexao.LocalDescription().SDP))
 	return nil
 }
@@ -503,9 +538,9 @@ func (s *SFU) aoReceberFaixa(sala, dono string, origem *webrtc.TrackRemote) {
 		if err != nil {
 			break
 		}
-		if _, err := saida.Write(buffer[:n]); err != nil {
-			break
-		}
+		// Pion ainda entrega aos outros destinos quando um binding falha.
+		// A origem só termina quando sua leitura termina, não quando alguém sai.
+		_, _ = saida.Write(buffer[:n])
 	}
 
 	s.removerFaixa(sala, f)
@@ -525,6 +560,9 @@ func (s *SFU) pedirChave(sala string, f *faixaEncaminhada) {
 	sessao := s.salas[sala][f.dono]
 	s.mu.RUnlock()
 	if sessao == nil {
+		return
+	}
+	if !f.permitirChave(time.Now()) {
 		return
 	}
 	_ = sessao.conexao.WriteRTCP([]rtcp.Packet{
@@ -567,6 +605,9 @@ func (s *SFU) assinar(destino *sessaoSFU, f *faixaEncaminhada) {
 		webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly})
 	if err != nil {
 		erroSFU("nao foi possivel entregar a faixa a %s: %v", curto(destino.peer), err)
+		destino.mu.Lock()
+		delete(destino.saidas, f.saida.ID())
+		destino.mu.Unlock()
 		return
 	}
 
@@ -637,7 +678,19 @@ func (s *SFU) assinarComChave(sala string, destino *sessaoSFU, f *faixaEncaminha
 // isso acontece, quem está recebendo fica esperando um quadro-chave que nunca
 // vem, e a tela fica parada até alguém recomeçar a transmissão.
 func (s *SFU) insistirNaChave(sala string, f *faixaEncaminhada) {
+	f.chaveMu.Lock()
+	if f.repetindoChave {
+		f.chaveMu.Unlock()
+		return
+	}
+	f.repetindoChave = true
+	f.chaveMu.Unlock()
 	go func() {
+		defer func() {
+			f.chaveMu.Lock()
+			f.repetindoChave = false
+			f.chaveMu.Unlock()
+		}()
 		for _, espera := range []time.Duration{0, 500 * time.Millisecond, 1500 * time.Millisecond} {
 			if espera > 0 {
 				time.Sleep(espera)
@@ -717,6 +770,13 @@ func (s *SFU) Descricao(sala, peer, tipo, sdp string) {
 		erroSFU("descricao de %s recusada: %v", curto(peer), err)
 		return
 	}
+	sessao.mu.Lock()
+	candidatos := sessao.candidatosPendentes
+	sessao.candidatosPendentes = nil
+	sessao.mu.Unlock()
+	for _, candidato := range candidatos {
+		_ = sessao.conexao.AddICECandidate(candidato)
+	}
 
 	if tipoSDP == webrtc.SDPTypeAnswer {
 		// Chegou a resposta: se apareceu faixa nova enquanto esperávamos, é
@@ -761,6 +821,21 @@ func (s *SFU) Candidato(sala, peer, candidato, mid string) {
 		SDPMid:        &mid,
 		SDPMLineIndex: &indice,
 	}
+	// Trickle ICE pode chegar antes da resposta SDP. Descartar aqui perde
+	// o unico caminho utilizavel de quem esta atras de um roteador.
+	sessao.mu.Lock()
+	if sessao.fechada {
+		sessao.mu.Unlock()
+		return
+	}
+	if sessao.conexao.RemoteDescription() == nil {
+		if len(sessao.candidatosPendentes) < 256 {
+			sessao.candidatosPendentes = append(sessao.candidatosPendentes, init)
+		}
+		sessao.mu.Unlock()
+		return
+	}
+	sessao.mu.Unlock()
 	if err := sessao.conexao.AddICECandidate(init); err != nil {
 		// Candidato inválido acontece o tempo todo; não é motivo para derrubar.
 		return
@@ -799,7 +874,7 @@ func curto(id string) string {
 }
 
 func infoSFU(formato string, args ...any) {
-	registrar("[sfu] "+formato, args...)
+	registrarDetalhado("[sfu] "+formato, args...)
 }
 
 func erroSFU(formato string, args ...any) {

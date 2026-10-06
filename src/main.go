@@ -85,6 +85,7 @@ Endpoints:
   /stats            contadores desde a subida`
 
 func main() {
+	defer concluirLogs()
 	prepararConsole()
 
 	// Antes de ler qualquer configuração: um .env na pasta do servidor deve
@@ -105,6 +106,7 @@ func main() {
 		// espaços separados, então não há conflito com o WebSocket - e quem
 		// hospeda não precisa pedir uma segunda porta ao painel.
 		sfu = NovoSFU(porta, opts.publico)
+		defer sfu.FecharMidia()
 		fmt.Println("  " + corVerde + "SFU ligado" + corReset + corCinza +
 			": o video passa por este servidor em vez de ir direto entre as pessoas." + corReset)
 		fmt.Println("  " + corCinza + "Isso resolve quem nao consegue se conectar por causa do roteador," + corReset)
